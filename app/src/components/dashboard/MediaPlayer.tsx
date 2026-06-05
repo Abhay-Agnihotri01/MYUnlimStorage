@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { X } from 'lucide-react';
+import { Trash2, X } from 'lucide-react';
 import { TelegramFile } from '../../types';
 import { isVideoFile, isAudioFile } from '../../utils';
 import { getBrowserFileObjectUrl, invokeCommand, isSavedMessagesDefaultStorage, isTauriRuntime, type StreamInfo } from '../../platform';
@@ -10,12 +10,13 @@ interface MediaPlayerProps {
     onClose: () => void;
     onNext?: () => void;
     onPrev?: () => void;
+    onDelete?: (id: number) => void;
     currentIndex?: number;
     totalItems?: number;
     activeFolderId: number | null;
 }
 
-export function MediaPlayer({ file, onClose, onNext, onPrev, currentIndex, totalItems, activeFolderId }: MediaPlayerProps) {
+export function MediaPlayer({ file, onClose, onNext, onPrev, onDelete, currentIndex, totalItems, activeFolderId }: MediaPlayerProps) {
     const [streamInfo, setStreamInfo] = useState<StreamInfo | null>(null);
     const [browserUrl, setBrowserUrl] = useState<string | null>(null);
     const isDesktopRuntime = isTauriRuntime();
@@ -103,12 +104,27 @@ export function MediaPlayer({ file, onClose, onNext, onPrev, currentIndex, total
             {...navigationGestures}
         >
             <div className="relative flex h-full w-full flex-col items-center justify-center" onClick={e => e.stopPropagation()}>
-                <button
-                    onClick={onClose}
-                    className="absolute right-4 top-4 z-20 rounded-full bg-black/50 p-2 text-white/70 transition-all hover:bg-white/15 hover:text-white"
-                >
-                    <X className="w-6 h-6" />
-                </button>
+                <div className="absolute right-4 top-4 z-20 flex gap-2">
+                    {onDelete && (
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                onDelete(file.id);
+                            }}
+                            className="rounded-full bg-black/50 p-2 text-white/70 transition-all hover:bg-white/15 hover:text-red-400"
+                            title="Delete"
+                        >
+                            <Trash2 className="w-6 h-6" />
+                        </button>
+                    )}
+                    <button
+                        onClick={onClose}
+                        className="rounded-full bg-black/50 p-2 text-white/70 transition-all hover:bg-white/15 hover:text-white"
+                        title="Close"
+                    >
+                        <X className="w-6 h-6" />
+                    </button>
+                </div>
 
                 <div className="flex h-full w-full items-center justify-center bg-black">
                     {!streamUrl ? (

@@ -1,5 +1,5 @@
 import { type PointerEvent as ReactPointerEvent, type ReactNode, type WheelEvent as ReactWheelEvent, useEffect, useRef, useState } from 'react';
-import { Archive, ArrowLeft, ChevronLeft, ChevronRight, Download, File, FileText, Presentation, RotateCcw, RotateCw, Search, Table2, ZoomIn, ZoomOut } from 'lucide-react';
+import { Archive, ArrowLeft, ChevronLeft, ChevronRight, Download, File, FileText, Presentation, RotateCcw, RotateCw, Search, Table2, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
 import { TelegramFile } from '../../types';
 import {
     formatBytes,
@@ -135,6 +135,7 @@ interface PreviewModalProps {
     onClose: () => void;
     onNext?: () => void;
     onPrev?: () => void;
+    onDelete?: (id: number) => void;
     currentIndex?: number;
     totalItems?: number;
     nextFile?: TelegramFile | null;
@@ -147,6 +148,7 @@ export function PreviewModal({
     onClose,
     onNext,
     onPrev,
+    onDelete,
     currentIndex,
     totalItems,
     nextFile,
@@ -382,6 +384,7 @@ export function PreviewModal({
                     src={src}
                     visible={previewChromeVisible}
                     onClose={onClose}
+                    onDelete={onDelete ? () => onDelete(file.id) : undefined}
                     currentIndex={currentIndex}
                     totalItems={totalItems}
                 />
@@ -624,6 +627,7 @@ function PreviewAppBar({
     src,
     visible,
     onClose,
+    onDelete,
     currentIndex,
     totalItems,
 }: {
@@ -631,6 +635,7 @@ function PreviewAppBar({
     src: string | null;
     visible: boolean;
     onClose: () => void;
+    onDelete?: () => void;
     currentIndex?: number;
     totalItems?: number;
 }) {
@@ -666,6 +671,20 @@ function PreviewAppBar({
                 >
                     <Download className="h-5 w-5" />
                 </a>
+            )}
+            {onDelete && (
+                <button
+                    type="button"
+                    onClick={(event) => {
+                        event.stopPropagation();
+                        onDelete();
+                    }}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white/75 transition hover:bg-white/10 hover:text-red-400"
+                    aria-label="Delete file"
+                    title="Delete"
+                >
+                    <Trash2 className="h-5 w-5" />
+                </button>
             )}
         </div>
     );

@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import { X, ZoomIn, ZoomOut, Maximize, PanelLeft, RotateCcw, RotateCw } from 'lucide-react';
+import { Trash2, X, ZoomIn, ZoomOut, Maximize, PanelLeft, RotateCcw, RotateCw } from 'lucide-react';
 // Use the legacy build because the modern build uses Map.getOrInsertComputed(),
 // which isn't available in Tauri's WebKit WebView
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
@@ -16,12 +16,13 @@ interface PdfViewerProps {
     onClose: () => void;
     onNext?: () => void;
     onPrev?: () => void;
+    onDelete?: (id: number) => void;
     currentIndex?: number;
     totalItems?: number;
     activeFolderId: number | null;
 }
 
-export function PdfViewer({ file, onClose, onNext, onPrev, currentIndex, totalItems, activeFolderId }: PdfViewerProps) {
+export function PdfViewer({ file, onClose, onNext, onPrev, onDelete, currentIndex, totalItems, activeFolderId }: PdfViewerProps) {
     const [sourceUrl, setSourceUrl] = useState<string | null>(null);
     const [pdf, setPdf] = useState<pdfjsLib.PDFDocumentProxy | null>(null);
     const [numPages, setNumPages] = useState<number>(0);
@@ -283,12 +284,27 @@ export function PdfViewer({ file, onClose, onNext, onPrev, currentIndex, totalIt
                 </div>
             </div>
 
-            <button
-                onClick={onClose}
-                className="absolute top-4 right-4 p-3 text-white/50 hover:text-white bg-black/40 backdrop-blur-md hover:bg-black/60 rounded-full transition-all z-10 border border-white/10"
-            >
-                <X className="w-6 h-6" />
-            </button>
+            <div className="absolute top-4 right-4 z-10 flex gap-2">
+                {onDelete && (
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            onDelete(file.id);
+                        }}
+                        className="p-3 text-white/50 hover:text-red-400 bg-black/40 backdrop-blur-md hover:bg-black/60 rounded-full transition-all border border-white/10"
+                        title="Delete"
+                    >
+                        <Trash2 className="w-6 h-6" />
+                    </button>
+                )}
+                <button
+                    onClick={onClose}
+                    className="p-3 text-white/50 hover:text-white bg-black/40 backdrop-blur-md hover:bg-black/60 rounded-full transition-all border border-white/10"
+                    title="Close"
+                >
+                    <X className="w-6 h-6" />
+                </button>
+            </div>
 
             {pdf && thumbnailOpen && (
                 <PdfThumbnailRail

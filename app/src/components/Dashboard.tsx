@@ -970,36 +970,38 @@ const EMPTY_FILES_ARRAY: TelegramFile[] = [];
     const handleExplorerDelete = useCallback(async (id: number) => {
         const folder = folders.find(f => f.id === id);
         if (folder) {
-            if (!await ensureProtectedAccess(folderToExplorerItem(folder), 'delete')) return;
+            if (!await ensureProtectedAccess(folderToExplorerItem(folder), 'delete')) return false;
             await handleFolderDelete(folder.id, folder.name);
             await handleSyncAndStamp();
-            return;
+            return true;
         }
         if (driveView === 'trash') {
             const file = displayedFiles.find(f => f.id === id);
-            if (!file) return;
-            if (!await ensureProtectedAccess(file, 'delete forever')) return;
+            if (!file) return false;
+            if (!await ensureProtectedAccess(file, 'delete forever')) return false;
             const ok = await confirm({
                 title: "Delete Forever",
                 message: `Permanently delete "${file.name}"? This cannot be restored by Telegram Drive.`,
                 confirmText: "Delete Forever",
                 variant: 'danger'
             });
-            if (!ok) return;
+            if (!ok) return false;
             try {
                 await invokeCommand('cmd_permanent_delete_file', { messageId: id, itemType: file.type || 'file' });
                 queryClient.invalidateQueries({ queryKey: ['files'] });
                 await handleSyncAndStamp();
                 toast.success(file.type === 'folder' ? "Folder permanently deleted" : "File permanently deleted");
+                return true;
             } catch (e) {
                 toast.error(`Permanent delete failed: ${friendlyDriveError(e)}`);
+                return false;
             }
-            return;
         }
         const file = displayedFiles.find(f => f.id === id);
-        if (file && !await ensureProtectedAccess(file, 'delete')) return;
+        if (file && !await ensureProtectedAccess(file, 'delete')) return false;
         const deleted = await handleDelete(id);
         if (deleted) await handleSyncAndStamp();
+        return deleted ?? false;
     }, [confirm, displayedFiles, driveView, ensureProtectedAccess, folders, handleDelete, handleFolderDelete, handleSyncAndStamp, queryClient]);
 
     const handleExplorerDownload = useCallback((id: number, name: string) => {
@@ -1510,6 +1512,16 @@ const EMPTY_FILES_ARRAY: TelegramFile[] = [];
                         onClose={() => setPlayingFile(null)}
                         onNext={handleNextPreview}
                         onPrev={handlePrevPreview}
+                        onDelete={async (id) => {
+                            const deleted = await handleExplorerDelete(id);
+                            if (deleted) {
+                                if (previewContextFiles.length > 1) {
+                                    handleNextPreview();
+                                } else {
+                                    setPlayingFile(null);
+                                }
+                            }
+                        }}
                         currentIndex={previewContextIndex}
                         totalItems={previewContextFiles.length}
                         activeFolderId={activeFolderId}
@@ -1522,6 +1534,16 @@ const EMPTY_FILES_ARRAY: TelegramFile[] = [];
                         onClose={() => setPdfFile(null)}
                         onNext={handleNextPreview}
                         onPrev={handlePrevPreview}
+                        onDelete={async (id) => {
+                            const deleted = await handleExplorerDelete(id);
+                            if (deleted) {
+                                if (previewContextFiles.length > 1) {
+                                    handleNextPreview();
+                                } else {
+                                    setPdfFile(null);
+                                }
+                            }
+                        }}
                         currentIndex={previewContextIndex}
                         totalItems={previewContextFiles.length}
                         activeFolderId={activeFolderId}
@@ -1743,6 +1765,16 @@ const EMPTY_FILES_ARRAY: TelegramFile[] = [];
                     onClose={() => setPreviewFile(null)}
                     onNext={handleNextPreview}
                     onPrev={handlePrevPreview}
+                    onDelete={async (id) => {
+                        const deleted = await handleExplorerDelete(id);
+                        if (deleted) {
+                            if (previewContextFiles.length > 1) {
+                                handleNextPreview();
+                            } else {
+                                setPreviewFile(null);
+                            }
+                        }
+                    }}
                     currentIndex={previewContextIndex}
                     totalItems={previewContextFiles.length}
                     nextFile={previewNeighbors.nextFile}
