@@ -327,7 +327,8 @@ export async function telegramFactoryReset(): Promise<boolean> {
         backups: [],
         settings: {
             trashRetentionDays: 30,
-            autoIndexLegacyMessages: true
+            autoIndexLegacyMessages: true,
+            duplicateStrategy: 'version'
         }
     };
     manifestCache = empty;

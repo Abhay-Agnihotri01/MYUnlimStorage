@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Moon, SlidersHorizontal, Sun, Wrench, X, Sparkles, AlertTriangle, type LucideIcon } from 'lucide-react';
 import { useTheme } from '../../context/ThemeContext';
 import { invokeCommand } from '../../platform';
+import { toast } from 'react-hot-toast';
 
 interface SettingsPageProps {
     onOpenTools: () => void;

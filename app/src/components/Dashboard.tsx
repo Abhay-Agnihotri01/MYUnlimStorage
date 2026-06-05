@@ -1123,7 +1123,7 @@ const EMPTY_FILES_ARRAY: TelegramFile[] = [];
         const targets = allFiles.filter((file) => {
             if (!file.mime_type?.startsWith('image/')) return false;
             if (file.trashed || file.missing || file.type === 'folder') return false;
-            const hasAiTag = file.tags?.some(t => t.startsWith('ai:'));
+            const hasAiTag = file.tags?.some((t: string) => t.startsWith('ai:'));
             return !hasAiTag;
         });
 
