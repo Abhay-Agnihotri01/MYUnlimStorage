@@ -318,6 +318,7 @@ export async function telegramFactoryReset(): Promise<boolean> {
     const empty: DriveManifest = {
         version: 2,
         schemaVersion: 2,
+        driveId: 'default',
         updatedAt: new Date().toISOString(),
         snapshotSeq: 999999999,
         folders: [],
