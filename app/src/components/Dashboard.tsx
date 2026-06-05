@@ -803,6 +803,47 @@ const EMPTY_FILES_ARRAY: TelegramFile[] = [];
         };
     }, [previewContextFiles, previewFile, playingFile, pdfFile]);
 
+    const handlePreviewDelete = useCallback(async (id: number) => {
+        const deleted = await handleExplorerDelete(id);
+        if (!deleted) return;
+
+        if (previewContextFiles.length <= 1) {
+            setPreviewFile(null);
+            setPlayingFile(null);
+            setPdfFile(null);
+            setPreviewContextFiles([]);
+            setPreviewContextIndex(-1);
+            return;
+        }
+
+        const currentIndex = previewContextFiles.findIndex((f) => f.id === id);
+        const nextFiles = previewContextFiles.filter((f) => f.id !== id);
+        setPreviewContextFiles(nextFiles);
+
+        const nextIndex = currentIndex >= nextFiles.length ? 0 : currentIndex;
+        const nextFile = nextFiles[nextIndex];
+        if (!nextFile) return;
+
+        setPreviewContextIndex(nextIndex);
+
+        const isMedia = isMediaFile(nextFile);
+        const isPdf = isPdfFile(nextFile);
+
+        if (isMedia) {
+            setPlayingFile(nextFile);
+            setPreviewFile(null);
+            setPdfFile(null);
+        } else if (isPdf) {
+            setPdfFile(nextFile);
+            setPreviewFile(null);
+            setPlayingFile(null);
+        } else {
+            setPreviewFile(nextFile);
+            setPlayingFile(null);
+            setPdfFile(null);
+        }
+    }, [handleExplorerDelete, previewContextFiles]);
+
     const handleDropOnFolder = async (e: React.DragEvent, targetFolderId: number | null) => {
         e.preventDefault();
         e.stopPropagation();
@@ -1512,16 +1553,7 @@ const EMPTY_FILES_ARRAY: TelegramFile[] = [];
                         onClose={() => setPlayingFile(null)}
                         onNext={handleNextPreview}
                         onPrev={handlePrevPreview}
-                        onDelete={async (id) => {
-                            const deleted = await handleExplorerDelete(id);
-                            if (deleted) {
-                                if (previewContextFiles.length > 1) {
-                                    handleNextPreview();
-                                } else {
-                                    setPlayingFile(null);
-                                }
-                            }
-                        }}
+                        onDelete={handlePreviewDelete}
                         currentIndex={previewContextIndex}
                         totalItems={previewContextFiles.length}
                         activeFolderId={activeFolderId}
@@ -1534,16 +1566,7 @@ const EMPTY_FILES_ARRAY: TelegramFile[] = [];
                         onClose={() => setPdfFile(null)}
                         onNext={handleNextPreview}
                         onPrev={handlePrevPreview}
-                        onDelete={async (id) => {
-                            const deleted = await handleExplorerDelete(id);
-                            if (deleted) {
-                                if (previewContextFiles.length > 1) {
-                                    handleNextPreview();
-                                } else {
-                                    setPdfFile(null);
-                                }
-                            }
-                        }}
+                        onDelete={handlePreviewDelete}
                         currentIndex={previewContextIndex}
                         totalItems={previewContextFiles.length}
                         activeFolderId={activeFolderId}
@@ -1765,16 +1788,7 @@ const EMPTY_FILES_ARRAY: TelegramFile[] = [];
                     onClose={() => setPreviewFile(null)}
                     onNext={handleNextPreview}
                     onPrev={handlePrevPreview}
-                    onDelete={async (id) => {
-                        const deleted = await handleExplorerDelete(id);
-                        if (deleted) {
-                            if (previewContextFiles.length > 1) {
-                                handleNextPreview();
-                            } else {
-                                setPreviewFile(null);
-                            }
-                        }
-                    }}
+                    onDelete={handlePreviewDelete}
                     currentIndex={previewContextIndex}
                     totalItems={previewContextFiles.length}
                     nextFile={previewNeighbors.nextFile}
