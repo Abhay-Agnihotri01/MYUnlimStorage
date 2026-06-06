@@ -294,3 +294,23 @@ body,
   cursor: not-allowed;
   opacity: 0.55;
 }
+
+/* Plyr Video Overrides */
+.plyr {
+  height: 100%;
+  width: 100%;
+}
+
+.plyr--video {
+  max-height: 100vh;
+}
+
+.plyr__video-wrapper {
+  height: 100%;
+}
+
+.plyr__video-wrapper video {
+  height: 100% !important;
+  max-height: 100vh !important;
+  object-fit: contain;
+}
