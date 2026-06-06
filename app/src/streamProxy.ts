@@ -92,7 +92,7 @@ async function getOrFetchChunk(messageId: number, alignedOffset: number, signal?
                 fetchPromises.delete(key);
                 reject(e);
             }
-        });
+        }, 'high');
     });
 
     fetchPromises.set(key, promise);

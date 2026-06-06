@@ -202,18 +202,45 @@ let nextTelegramUploadAt = 0;
 const unlockedProtectedItems = new Set<string>();
 
 const pendingThumbnails = new Map<number, Promise<string>>();
-let globalNetworkMutex = Promise.resolve();
 
-export async function runWithGlobalNetworkMutex<T>(task: () => Promise<T>): Promise<T> {
+type Task<T> = () => Promise<T>;
+interface QueuedTask<T> {
+    task: Task<T>;
+    resolve: (value: T | PromiseLike<T>) => void;
+    reject: (reason?: any) => void;
+}
+
+const highPriorityQueue: QueuedTask<any>[] = [];
+const lowPriorityQueue: QueuedTask<any>[] = [];
+let isNetworkTaskRunning = false;
+
+async function processNextNetworkTask() {
+    if (isNetworkTaskRunning) return;
+    
+    const nextTask = highPriorityQueue.shift() || lowPriorityQueue.shift();
+    if (!nextTask) return;
+
+    isNetworkTaskRunning = true;
+    try {
+        const result = await nextTask.task();
+        nextTask.resolve(result);
+    } catch (e) {
+        nextTask.reject(e);
+    } finally {
+        isNetworkTaskRunning = false;
+        processNextNetworkTask();
+    }
+}
+
+export async function runWithGlobalNetworkMutex<T>(task: Task<T>, priority: 'high' | 'low' = 'low'): Promise<T> {
     return new Promise<T>((resolve, reject) => {
-        globalNetworkMutex = globalNetworkMutex.then(async () => {
-            try {
-                const result = await task();
-                resolve(result);
-            } catch (e) {
-                reject(e);
-            }
-        }).catch(() => {});
+        const queuedTask = { task, resolve, reject };
+        if (priority === 'high') {
+            highPriorityQueue.push(queuedTask);
+        } else {
+            lowPriorityQueue.push(queuedTask);
+        }
+        processNextNetworkTask();
     });
 }
 
@@ -1609,7 +1636,7 @@ export async function telegramDownloadBlob(messageId: number): Promise<{ blob: B
                 sizeToNumber(downloaded);
             }
         },
-    });
+    }, 'high');
 
     const file = message.file;
     const blob = new Blob([bytes as unknown as BlobPart], { type: file?.mimeType || 'application/octet-stream' });
@@ -1654,7 +1681,7 @@ export async function telegramDownloadThumbnailBlob(messageId: number): Promise<
 
     const bytes = await downloadMessageBytes(client, message, {
         thumb: 1,
-    });
+    }, 'low');
 
     const blob = new Blob([bytes as unknown as BlobPart], { type: file?.mimeType || 'image/jpeg' });
 
@@ -1691,14 +1718,15 @@ export async function telegramGetThumbnailObjectUrl(messageId: number): Promise<
 async function downloadMessageBytes(
     client: TelegramClientInstance,
     message: TelegramMessage,
-    options: { progressCallback?: (downloaded: unknown, total: unknown) => void; thumb?: number | string | any } = {}
+    options: { progressCallback?: (downloaded: unknown, total: unknown) => void; thumb?: number | string | any } = {},
+    priority: 'high' | 'low' = 'low'
 ): Promise<Uint8Array> {
     return runWithGlobalNetworkMutex(async () => {
         const result = await client.downloadMedia(message, options);
         if (!result || typeof result === 'string') throw new Error('Download failed');
         if (result instanceof Uint8Array) return result;
         return new Uint8Array(result);
-    });
+    }, priority);
 }
 
 export async function getTelegramMessage(messageId: number): Promise<TelegramMessage> {
