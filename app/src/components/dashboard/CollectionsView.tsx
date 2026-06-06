@@ -317,7 +317,19 @@ export function CollectionsView({
                     </div>
                     
                     {activeTab === 'manual' && (
-                        manualAlbums.length > 0 ? (
+                        loading ? (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                                {Array.from({ length: 6 }).map((_, i) => (
+                                    <div key={`skeleton-${i}`} className="group relative flex flex-col bg-telegram-surface rounded-xl border border-telegram-border overflow-hidden animate-pulse">
+                                        <div className="aspect-square bg-telegram-hover"></div>
+                                        <div className="p-3">
+                                            <div className="h-4 bg-telegram-hover rounded w-3/4 mb-2"></div>
+                                            <div className="h-3 bg-telegram-hover rounded w-1/4"></div>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : manualAlbums.length > 0 ? (
                             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                                 {manualAlbums.map((album) => (
                                     <div 
@@ -368,7 +380,19 @@ export function CollectionsView({
                                 </div>
                             )}
                             
-                            {aiAlbums.length > 0 ? (
+                            {loading ? (
+                                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                                    {Array.from({ length: 6 }).map((_, i) => (
+                                        <div key={`skeleton-ai-${i}`} className="group relative flex flex-col bg-telegram-surface rounded-xl border border-telegram-border overflow-hidden animate-pulse">
+                                            <div className="aspect-square bg-telegram-hover"></div>
+                                            <div className="p-3">
+                                                <div className="h-4 bg-telegram-hover rounded w-3/4 mb-2"></div>
+                                                <div className="h-3 bg-telegram-hover rounded w-1/4"></div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : aiAlbums.length > 0 ? (
                                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                                 {aiAlbums.map((album) => (
                                     <div 
