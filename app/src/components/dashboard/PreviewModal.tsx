@@ -243,10 +243,19 @@ export function PreviewModal({
                     }).catch(() => { /* ignore */ });
                 }
 
-                const path = await invokeCommand<string>('cmd_get_preview', {
-                    messageId: file.id,
-                    folderId: activeFolderId,
-                });
+                let path: string;
+                let isStream = false;
+
+                if (imagePreview && navigator.serviceWorker && navigator.serviceWorker.controller) {
+                    path = `/stream/${file.id}`;
+                    isStream = true;
+                } else {
+                    path = await invokeCommand<string>('cmd_get_preview', {
+                        messageId: file.id,
+                        folderId: activeFolderId,
+                    });
+                }
+
                 if (requestId !== latestRequestRef.current) return;
 
                 if (!path) {
@@ -254,7 +263,7 @@ export function PreviewModal({
                     return;
                 }
 
-                const normalized = path.startsWith('data:') ? path : await toAssetUrl(path);
+                const normalized = isStream || path.startsWith('data:') ? path : await toAssetUrl(path);
                 if (requestId !== latestRequestRef.current) return;
 
                 const nextCacheValue: Omit<PreviewCacheValue, 'cachedAt'> = { src: normalized };

@@ -52,6 +52,59 @@ self.addEventListener('fetch', (event) => {
                     return new Response('File info not found', { status: 404 });
                 }
 
+                const hasRange = event.request.headers.has('Range');
+
+                if (!hasRange) {
+                    const stream = new ReadableStream({
+                        async start(controller) {
+                            let currentByte = 0;
+                            const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
+
+                            while (currentByte < fileInfo.size) {
+                                const endByte = Math.min(currentByte + CHUNK_SIZE - 1, fileInfo.size - 1);
+                                
+                                const chunkRequestId = crypto.randomUUID();
+                                const chunkPromise = new Promise((resolve) => {
+                                    pendingRequests.set(chunkRequestId, resolve);
+                                });
+
+                                client.postMessage({
+                                    type: 'GET_CHUNK',
+                                    messageId,
+                                    startByte: currentByte,
+                                    endByte,
+                                    requestId: chunkRequestId
+                                });
+
+                                const chunkData = await chunkPromise;
+                                
+                                if (!chunkData || chunkData.byteLength === 0) {
+                                    controller.error('Failed to fetch chunk');
+                                    break;
+                                }
+                                
+                                controller.enqueue(new Uint8Array(chunkData));
+                                currentByte = endByte + 1;
+                            }
+                            controller.close();
+                        }
+                    });
+
+                    return new Response(stream, {
+                        status: 200,
+                        headers: {
+                            'Content-Type': fileInfo.mimeType || 'application/octet-stream',
+                            'Content-Length': fileInfo.size.toString(),
+                            'Accept-Ranges': 'bytes'
+                        }
+                    });
+                }
+
+                const rangeHeader = event.request.headers.get('Range') || 'bytes=0-';
+                const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
+                let startByte = match ? parseInt(match[1], 10) : 0;
+                let endByte = match && match[2] ? parseInt(match[2], 10) : undefined;
+
                 if (endByte === undefined) {
                     endByte = Math.min(startByte + 5 * 1024 * 1024 - 1, fileInfo.size - 1);
                 } else if (endByte >= fileInfo.size) {
