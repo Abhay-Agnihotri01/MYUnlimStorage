@@ -4,6 +4,8 @@ import { TelegramFile } from '../../types';
 import { isVideoFile, isAudioFile } from '../../utils';
 import { getBrowserFileObjectUrl, invokeCommand, isSavedMessagesDefaultStorage, isTauriRuntime, type StreamInfo } from '../../platform';
 import { usePreviewNavigationGestures } from '../../hooks/usePreviewNavigationGestures';
+import { Plyr } from 'plyr-react';
+import 'plyr-react/plyr.css';
 
 interface MediaPlayerProps {
     file: TelegramFile;
@@ -138,18 +140,49 @@ export function MediaPlayer({ file, onClose, onNext, onPrev, onDelete, currentIn
                             <p>Preparing stream...</p>
                         </div>
                     ) : isVideo ? (
-                        <video
-                            src={streamUrl}
-                            controls
-                            autoPlay
-                            className="h-full w-full object-contain"
-                        />
+                        <div className="h-full w-full flex items-center justify-center bg-black">
+                            <div className="w-full h-full">
+                                <Plyr
+                                    source={{
+                                        type: 'video',
+                                        sources: [
+                                            {
+                                                src: streamUrl,
+                                                type: 'video/mp4',
+                                            },
+                                        ],
+                                    }}
+                                    options={{
+                                        autoplay: true,
+                                        controls: ['play-large', 'play', 'progress', 'current-time', 'mute', 'volume', 'fullscreen'],
+                                        keyboard: { focused: true, global: true },
+                                    }}
+                                />
+                            </div>
+                        </div>
                     ) : isAudio ? (
                         <div className="flex h-full w-full flex-col items-center justify-center bg-gradient-to-br from-telegram-primary/20 to-black">
                             <div className="w-32 h-32 rounded-full bg-telegram-surface flex items-center justify-center mb-8 shadow-xl animate-pulse-slow">
                                 <svg xmlns="http://www.w3.org/2000/svg" className="w-12 h-12 text-telegram-primary" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 18V5l12-2v13" /><circle cx="6" cy="18" r="3" /><circle cx="18" cy="16" r="3" /></svg>
                             </div>
-                            <audio src={streamUrl} controls autoPlay className="w-full max-w-md" />
+                            <div className="w-full max-w-md">
+                                <Plyr
+                                    source={{
+                                        type: 'audio',
+                                        sources: [
+                                            {
+                                                src: streamUrl,
+                                                type: 'audio/mp3',
+                                            },
+                                        ],
+                                    }}
+                                    options={{
+                                        autoplay: true,
+                                        controls: ['play', 'progress', 'current-time', 'mute', 'volume'],
+                                        keyboard: { focused: true, global: true },
+                                    }}
+                                />
+                            </div>
                         </div>
                     ) : (
                         <div className="text-white">Unsupported media type</div>
