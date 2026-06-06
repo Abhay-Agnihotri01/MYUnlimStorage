@@ -826,8 +826,10 @@ async function invokeBrowserTelegramCommand<T>(command: string, args: CommandArg
             await telegramDownloadFile(Number(args.messageId));
             return 'Download started' as T;
         case 'cmd_get_preview':
-        case 'cmd_get_thumbnail':
             return await telegramGetObjectUrl(Number(args.messageId)) as T;
+        case 'cmd_get_thumbnail':
+            const { telegramGetThumbnailObjectUrl } = await import('./telegramBrowser');
+            return await telegramGetThumbnailObjectUrl(Number(args.messageId)) as T;
         case 'cmd_get_upload_conflicts':
             return await telegramGetUploadConflicts(
                 String(args.name || ''),

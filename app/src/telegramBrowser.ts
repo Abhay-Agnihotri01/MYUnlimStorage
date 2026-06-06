@@ -41,6 +41,7 @@ const OFFLINE_CACHE_STORE = 'blobs';
 const OFFLINE_CACHE_INDEX_KEY = 'telegram-drive-offline-cache-index';
 const OFFLINE_CACHE_MAX_ITEMS = 80;
 const OFFLINE_CACHE_MAX_BYTES = 512 * 1024 * 1024;
+const thumbnailCache = new Map<number, Blob>();
 const MANIFEST_MARKER = '[telegram-drive-manifest-v1]';
 const MANIFEST_FILENAME = '.telegram-drive-manifest.json';
 const MANIFEST_BACKUP_COUNT = 5;
@@ -1628,10 +1629,40 @@ export async function telegramDownloadBlob(messageId: number): Promise<{ blob: B
     };
 }
 
+export async function telegramDownloadThumbnailBlob(messageId: number): Promise<{ blob: Blob; name: string }> {
+    const client = await authorizedTelegramClient();
+    const message = await getTelegramMessage(messageId);
+    const manifest = await getDriveManifest();
+    const record = manifest.files[String(messageId)];
+    const file = message.file;
+
+    const bytes = await downloadMessageBytes(client, message, {
+        thumb: 1,
+    });
+
+    const blob = new Blob([bytes as unknown as BlobPart], { type: file?.mimeType || 'image/jpeg' });
+
+    return {
+        blob,
+        name: record?.name || getMessageFilename(message),
+    };
+}
+
+export async function telegramGetThumbnailObjectUrl(messageId: number): Promise<string> {
+    if (thumbnailCache.has(messageId)) {
+        const cachedBlob = thumbnailCache.get(messageId) as Blob;
+        return URL.createObjectURL(cachedBlob);
+    }
+
+    const { blob } = await telegramDownloadThumbnailBlob(messageId);
+    thumbnailCache.set(messageId, blob);
+    return URL.createObjectURL(blob);
+}
+
 async function downloadMessageBytes(
     client: TelegramClientInstance,
     message: TelegramMessage,
-    options: { progressCallback?: (downloaded: unknown, total: unknown) => void } = {}
+    options: { progressCallback?: (downloaded: unknown, total: unknown) => void; thumb?: number | string | any } = {}
 ): Promise<Uint8Array> {
     const result = await client.downloadMedia(message, options);
     if (!result || typeof result === 'string') throw new Error('Download failed');
@@ -1639,7 +1670,7 @@ async function downloadMessageBytes(
     return new Uint8Array(result);
 }
 
-async function getTelegramMessage(messageId: number): Promise<TelegramMessage> {
+export async function getTelegramMessage(messageId: number): Promise<TelegramMessage> {
     const client = await authorizedTelegramClient();
     const messages = await client.getMessages('me', { ids: messageId });
     const message = Array.from(messages)[0];
@@ -1648,7 +1679,7 @@ async function getTelegramMessage(messageId: number): Promise<TelegramMessage> {
     return message;
 }
 
-async function getDriveManifest(forceRemote = false): Promise<DriveManifest> {
+export async function getDriveManifest(forceRemote = false): Promise<DriveManifest> {
     if (manifestCache && !forceRemote) return cloneManifest(manifestCache);
 
     if (forceRemote) {
@@ -4272,4 +4303,7 @@ function formatTelegramUploadError(err: unknown): string {
 
 function sleep(ms: number): Promise<void> {
     return new Promise((resolve) => window.setTimeout(resolve, ms));
+}
+export async function getAuthorizedClient() {
+    return await authorizedTelegramClient();
 }

@@ -224,6 +224,25 @@ export function PreviewModal({
             setIsPreviewTruncated(false);
 
             try {
+                // Fast path: try to load thumbnail immediately for images to improve perceived loading speed
+                if (imagePreview) {
+                    invokeCommand<string>('cmd_get_thumbnail', {
+                        messageId: file.id,
+                        folderId: activeFolderId,
+                    }).then(async (thumbPath) => {
+                        if (!thumbPath || requestId !== latestRequestRef.current) return;
+                        
+                        if (thumbPath.startsWith('data:') || thumbPath.startsWith('blob:') || thumbPath.startsWith('http')) {
+                            setSrc((currentSrc) => currentSrc ? currentSrc : thumbPath);
+                        } else {
+                            const normalized = await toAssetUrl(thumbPath);
+                            if (requestId === latestRequestRef.current) {
+                                setSrc((currentSrc) => currentSrc ? currentSrc : normalized);
+                            }
+                        }
+                    }).catch(() => { /* ignore */ });
+                }
+
                 const path = await invokeCommand<string>('cmd_get_preview', {
                     messageId: file.id,
                     folderId: activeFolderId,

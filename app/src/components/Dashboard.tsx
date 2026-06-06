@@ -803,6 +803,43 @@ const EMPTY_FILES_ARRAY: TelegramFile[] = [];
         };
     }, [previewContextFiles, previewFile, playingFile, pdfFile]);
 
+    const handleExplorerDelete = useCallback(async (id: number) => {
+        const folder = folders.find(f => f.id === id);
+        if (folder) {
+            if (!await ensureProtectedAccess(folderToExplorerItem(folder), 'delete')) return false;
+            await handleFolderDelete(folder.id, folder.name);
+            await handleSyncAndStamp();
+            return true;
+        }
+        if (driveView === 'trash') {
+            const file = displayedFiles.find(f => f.id === id);
+            if (!file) return false;
+            if (!await ensureProtectedAccess(file, 'delete forever')) return false;
+            const ok = await confirm({
+                title: "Delete Forever",
+                message: `Permanently delete "${file.name}"? This cannot be restored by Telegram Drive.`,
+                confirmText: "Delete Forever",
+                variant: 'danger'
+            });
+            if (!ok) return false;
+            try {
+                await invokeCommand('cmd_permanent_delete_file', { messageId: id, itemType: file.type || 'file' });
+                queryClient.invalidateQueries({ queryKey: ['files'] });
+                await handleSyncAndStamp();
+                toast.success(file.type === 'folder' ? "Folder permanently deleted" : "File permanently deleted");
+                return true;
+            } catch (e) {
+                toast.error(`Permanent delete failed: ${friendlyDriveError(e)}`);
+                return false;
+            }
+        }
+        const file = displayedFiles.find(f => f.id === id);
+        if (file && !await ensureProtectedAccess(file, 'delete')) return false;
+        const deleted = await handleDelete(id);
+        if (deleted) await handleSyncAndStamp();
+        return deleted ?? false;
+    }, [confirm, displayedFiles, driveView, ensureProtectedAccess, folders, handleDelete, handleFolderDelete, handleSyncAndStamp, queryClient]);
+
     const handlePreviewDelete = useCallback(async (id: number) => {
         const deleted = await handleExplorerDelete(id);
         if (!deleted) return;
@@ -1008,42 +1045,6 @@ const EMPTY_FILES_ARRAY: TelegramFile[] = [];
         toast.success(`Folder structure ready: ${uploadEntries.length} file(s), ${knownFolders.length - folders.length} new folder(s).`);
     }, [activeFolderId, folders, handleCreateFolder, isDesktopRuntime, queueFileEntries, savedMessagesDefault, handleOpenFolderId]);
 
-    const handleExplorerDelete = useCallback(async (id: number) => {
-        const folder = folders.find(f => f.id === id);
-        if (folder) {
-            if (!await ensureProtectedAccess(folderToExplorerItem(folder), 'delete')) return false;
-            await handleFolderDelete(folder.id, folder.name);
-            await handleSyncAndStamp();
-            return true;
-        }
-        if (driveView === 'trash') {
-            const file = displayedFiles.find(f => f.id === id);
-            if (!file) return false;
-            if (!await ensureProtectedAccess(file, 'delete forever')) return false;
-            const ok = await confirm({
-                title: "Delete Forever",
-                message: `Permanently delete "${file.name}"? This cannot be restored by Telegram Drive.`,
-                confirmText: "Delete Forever",
-                variant: 'danger'
-            });
-            if (!ok) return false;
-            try {
-                await invokeCommand('cmd_permanent_delete_file', { messageId: id, itemType: file.type || 'file' });
-                queryClient.invalidateQueries({ queryKey: ['files'] });
-                await handleSyncAndStamp();
-                toast.success(file.type === 'folder' ? "Folder permanently deleted" : "File permanently deleted");
-                return true;
-            } catch (e) {
-                toast.error(`Permanent delete failed: ${friendlyDriveError(e)}`);
-                return false;
-            }
-        }
-        const file = displayedFiles.find(f => f.id === id);
-        if (file && !await ensureProtectedAccess(file, 'delete')) return false;
-        const deleted = await handleDelete(id);
-        if (deleted) await handleSyncAndStamp();
-        return deleted ?? false;
-    }, [confirm, displayedFiles, driveView, ensureProtectedAccess, folders, handleDelete, handleFolderDelete, handleSyncAndStamp, queryClient]);
 
     const handleExplorerDownload = useCallback((id: number, name: string) => {
         const item = displayedFiles.find(f => f.id === id);

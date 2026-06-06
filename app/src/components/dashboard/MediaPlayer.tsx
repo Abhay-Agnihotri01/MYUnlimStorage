@@ -42,14 +42,19 @@ export function MediaPlayer({ file, onClose, onNext, onPrev, onDelete, currentIn
 
         setStreamInfo(null);
         let objectUrl: string | null = null;
-        getBrowserFileObjectUrl(file.id).then((url) => {
-            if (cancelled) {
-                URL.revokeObjectURL(url);
-                return;
-            }
-            objectUrl = url;
-            setBrowserUrl(url);
-        }).catch(() => setBrowserUrl(null));
+
+        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
+            setBrowserUrl(`/stream/${file.id}`);
+        } else {
+            getBrowserFileObjectUrl(file.id).then((url) => {
+                if (cancelled) {
+                    URL.revokeObjectURL(url);
+                    return;
+                }
+                objectUrl = url;
+                setBrowserUrl(url);
+            }).catch(() => setBrowserUrl(null));
+        }
 
         return () => {
             cancelled = true;
