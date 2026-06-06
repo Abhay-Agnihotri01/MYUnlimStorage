@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { TelegramFile } from '../../types';
 import { FileExplorer } from './FileExplorer';
-import { ArrowLeft, Image as ImageIcon, Sparkles, Plus } from 'lucide-react';
+import { ArrowLeft, Image as ImageIcon, Sparkles, Plus, Trash2 } from 'lucide-react';
 import { invokeCommand } from '../../platform';
 import { toast } from 'sonner';
 
@@ -41,6 +41,7 @@ export function CollectionsView({
     const [isSelectingForCollection, setIsSelectingForCollection] = useState<string | null>(null);
     const [newCollectionName, setNewCollectionName] = useState('');
     const [isSavingCollection, setIsSavingCollection] = useState(false);
+    const [isDeletingCollection, setIsDeletingCollection] = useState(false);
 
     const albums = useMemo(() => {
         const collectionsMap = new Map<string, CollectionAlbum>();
@@ -113,6 +114,27 @@ export function CollectionsView({
         }
     };
 
+    const handleDeleteCollection = async () => {
+        if (!activeAlbum) return;
+        if (!confirm(`Are you sure you want to delete the collection "${activeAlbum.name}"?\n\nThe photos will NOT be deleted. They will safely remain in their original folders.`)) return;
+        
+        setIsDeletingCollection(true);
+        try {
+            for (const file of activeAlbum.files) {
+                const existingTags = file.tags || [];
+                const newTags = existingTags.filter(t => t !== activeAlbum.tag);
+                await invokeCommand('cmd_set_tags', { messageId: file.id, tags: newTags });
+            }
+            toast.success(`Deleted collection "${activeAlbum.name}"`);
+            setActiveTag(null);
+        } catch (err) {
+            console.error(err);
+            toast.error('Failed to delete collection');
+        } finally {
+            setIsDeletingCollection(false);
+        }
+    };
+
     if (isSelectingForCollection) {
         return (
             <div className="flex flex-col h-full">
@@ -175,20 +197,30 @@ export function CollectionsView({
     if (activeAlbum) {
         return (
             <div className="flex flex-col h-full">
-                <div className="flex items-center gap-4 px-4 py-3 md:px-6 md:py-4 border-b border-telegram-border bg-telegram-surface">
-                    <button 
-                        onClick={() => setActiveTag(null)}
-                        className="p-2 hover:bg-telegram-hover rounded-full transition-colors text-telegram-text"
-                    >
-                        <ArrowLeft className="w-5 h-5" />
-                    </button>
-                    <div>
-                        <h2 className="text-xl font-bold flex items-center gap-2 text-telegram-text">
-                            {activeAlbum.isAi && <Sparkles className="w-5 h-5 text-telegram-primary" />}
-                            {activeAlbum.name}
-                        </h2>
-                        <p className="text-sm text-telegram-subtext">{activeAlbum.files.length} items</p>
+                <div className="flex items-center justify-between px-4 py-3 md:px-6 md:py-4 border-b border-telegram-border bg-telegram-surface">
+                    <div className="flex items-center gap-4">
+                        <button 
+                            onClick={() => setActiveTag(null)}
+                            className="p-2 hover:bg-telegram-hover rounded-full transition-colors text-telegram-text"
+                        >
+                            <ArrowLeft className="w-5 h-5" />
+                        </button>
+                        <div>
+                            <h2 className="text-xl font-bold flex items-center gap-2 text-telegram-text">
+                                {activeAlbum.isAi && <Sparkles className="w-5 h-5 text-telegram-primary" />}
+                                {activeAlbum.name}
+                            </h2>
+                            <p className="text-sm text-telegram-subtext">{activeAlbum.files.length} items</p>
+                        </div>
                     </div>
+                    <button
+                        onClick={handleDeleteCollection}
+                        disabled={isDeletingCollection}
+                        className={`p-2 rounded-full transition-colors ${isDeletingCollection ? 'opacity-50 cursor-not-allowed text-telegram-subtext' : 'text-red-500 hover:bg-red-500/10'}`}
+                        title="Delete Collection"
+                    >
+                        <Trash2 className="w-5 h-5" />
+                    </button>
                 </div>
                 <FileExplorer
                     files={activeAlbum.files}
