@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from 'react';
 import { TelegramFile } from '../../types';
 import { FileExplorer } from './FileExplorer';
-import { ArrowLeft, Image as ImageIcon, Sparkles, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Image as ImageIcon, Sparkles, Plus, Trash2, CheckSquare } from 'lucide-react';
 import { invokeCommand } from '../../platform';
 import { toast } from 'sonner';
 
@@ -136,6 +136,17 @@ export function CollectionsView({
     };
 
     if (isSelectingForCollection) {
+        const selectableFiles = files.filter(f => f.mime_type?.startsWith('image/') || f.mime_type?.startsWith('video/'));
+        const allSelected = selectableFiles.length > 0 && selectedIds.length === selectableFiles.length;
+
+        const handleSelectAll = () => {
+            if (allSelected) {
+                setSelectedIds([]);
+            } else {
+                setSelectedIds(selectableFiles.map(f => f.id));
+            }
+        };
+
         return (
             <div className="flex flex-col h-full">
                 <div className="flex flex-wrap items-center justify-between gap-4 px-4 py-3 md:px-6 md:py-4 border-b border-telegram-border bg-telegram-surface">
@@ -146,6 +157,13 @@ export function CollectionsView({
                         <p className="text-sm text-telegram-subtext">{selectedIds.length} items selected</p>
                     </div>
                     <div className="flex items-center gap-2">
+                        <button 
+                            onClick={handleSelectAll}
+                            className="rounded-md px-4 py-2 text-sm font-medium text-telegram-text hover:bg-telegram-hover transition mr-2 flex items-center gap-2"
+                        >
+                            <CheckSquare className="w-4 h-4" />
+                            {allSelected ? 'Deselect All' : 'Select All'}
+                        </button>
                         <button 
                             onClick={() => {
                                 setIsSelectingForCollection(null);
@@ -165,7 +183,7 @@ export function CollectionsView({
                     </div>
                 </div>
                 <FileExplorer
-                    files={files.filter(f => f.mime_type?.startsWith('image/') || f.mime_type?.startsWith('video/'))}
+                    files={selectableFiles}
                     loading={loading}
                     error={error}
                     viewMode="grid"
