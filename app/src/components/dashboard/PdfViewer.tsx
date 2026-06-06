@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
-import { Trash2, X, ZoomIn, ZoomOut, Maximize, PanelLeft, RotateCcw, RotateCw } from 'lucide-react';
+import { Trash2, X, ZoomIn, ZoomOut, Maximize, PanelLeft, RotateCcw, RotateCw, Share2 } from 'lucide-react';
+import { toast } from 'sonner';
 // Use the legacy build because the modern build uses Map.getOrInsertComputed(),
 // which isn't available in Tauri's WebKit WebView
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
@@ -285,6 +286,17 @@ export function PdfViewer({ file, onClose, onNext, onPrev, onDelete, currentInde
             </div>
 
             <div className="absolute top-4 right-4 z-10 flex gap-2">
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        navigator.clipboard.writeText(window.location.href);
+                        toast.success('Link copied to clipboard');
+                    }}
+                    className="p-3 text-white/50 hover:text-white bg-black/40 backdrop-blur-md hover:bg-black/60 rounded-full transition-all border border-white/10"
+                    title="Copy Link"
+                >
+                    <Share2 className="w-6 h-6" />
+                </button>
                 {onDelete && (
                     <button
                         onClick={(e) => {

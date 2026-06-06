@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Trash2, X } from 'lucide-react';
+import { Share2, Trash2, X } from 'lucide-react';
+import { toast } from 'sonner';
 import { TelegramFile } from '../../types';
 import { isVideoFile, isAudioFile } from '../../utils';
 import { getBrowserFileObjectUrl, invokeCommand, isSavedMessagesDefaultStorage, isTauriRuntime, type StreamInfo } from '../../platform';
@@ -112,6 +113,17 @@ export function MediaPlayer({ file, onClose, onNext, onPrev, onDelete, currentIn
         >
             <div className="relative flex h-full w-full flex-col items-center justify-center" onClick={e => e.stopPropagation()}>
                 <div className="absolute right-4 top-4 z-20 flex gap-2">
+                    <button
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            navigator.clipboard.writeText(window.location.href);
+                            toast.success('Link copied to clipboard');
+                        }}
+                        className="rounded-full bg-black/50 p-2 text-white/70 transition-all hover:bg-white/15 hover:text-white"
+                        title="Copy Link"
+                    >
+                        <Share2 className="w-6 h-6" />
+                    </button>
                     {onDelete && (
                         <button
                             onClick={(e) => {

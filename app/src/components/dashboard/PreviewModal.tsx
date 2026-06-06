@@ -1,5 +1,6 @@
 import { type PointerEvent as ReactPointerEvent, type ReactNode, type WheelEvent as ReactWheelEvent, useEffect, useRef, useState } from 'react';
-import { Archive, ArrowLeft, ChevronLeft, ChevronRight, Download, File, FileText, Presentation, RotateCcw, RotateCw, Search, Table2, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
+import { Archive, ArrowLeft, ChevronLeft, ChevronRight, Download, File, FileText, Presentation, RotateCcw, RotateCw, Search, Share2, Table2, Trash2, ZoomIn, ZoomOut } from 'lucide-react';
+import { toast } from 'sonner';
 import { TelegramFile } from '../../types';
 import {
     formatBytes,
@@ -693,6 +694,19 @@ function PreviewAppBar({
                 </h2>
                 <p className="truncate text-xs leading-4 text-white/55">{subtitle}</p>
             </div>
+            <button
+                type="button"
+                onClick={(event) => {
+                    event.stopPropagation();
+                    navigator.clipboard.writeText(window.location.href);
+                    toast.success('Link copied to clipboard');
+                }}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-white/80 transition hover:bg-white/10 hover:text-white"
+                aria-label="Copy Link"
+                title="Copy Link"
+            >
+                <Share2 className="h-5 w-5" />
+            </button>
             {src && (
                 <a
                     href={src}

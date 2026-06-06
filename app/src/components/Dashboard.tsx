@@ -18,7 +18,7 @@ import { MoveToFolderModal } from './dashboard/MoveToFolderModal';
 import { PreviewModal } from './dashboard/PreviewModal';
 import { AnalyticsBanner } from './dashboard/AnalyticsBanner';
 import { MediaPlayer } from './dashboard/MediaPlayer';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { DragDropOverlay } from './dashboard/DragDropOverlay';
 import { ExternalDropBlocker } from './dashboard/ExternalDropBlocker';
 import { PdfViewer } from './dashboard/PdfViewer';
@@ -62,6 +62,9 @@ export function Dashboard({ onLogout }: { onLogout: () => void }) {
 
     const location = useLocation();
     const navigate = useNavigate();
+    const [searchParams, setSearchParams] = useSearchParams();
+    const previewIdStr = searchParams.get('preview');
+    const previewId = previewIdStr ? parseInt(previewIdStr) : null;
     const [driveView, setDriveViewLocal] = useState<DriveView>('files');
     const [previewFile, setPreviewFile] = useState<TelegramFile | null>(null);
     const [activeTrashFolderId, setActiveTrashFolderId] = useState<number | null>(null);
@@ -541,10 +544,10 @@ const EMPTY_FILES_ARRAY: TelegramFile[] = [];
     const handleEscape = useCallback(() => {
         setSelectedIds([]);
         setSearchTerm("");
-        setPreviewFile(null);
-        setPlayingFile(null);
-        setPdfFile(null);
-    }, []);
+        const newParams = new URLSearchParams(searchParams);
+        newParams.delete('preview');
+        setSearchParams(newParams);
+    }, [searchParams, setSearchParams]);
 
     const handleFocusSearch = useCallback(() => {
         const searchInput = document.querySelector('input[placeholder="Search files..."]') as HTMLInputElement;
@@ -605,14 +608,50 @@ const EMPTY_FILES_ARRAY: TelegramFile[] = [];
 
 
     useEffect(() => {
+        if (!previewId) {
+            if (previewFile || playingFile || pdfFile) {
+                setPreviewFile(null);
+                setPlayingFile(null);
+                setPdfFile(null);
+            }
+            return;
+        }
+
+        if (previewFile?.id === previewId || playingFile?.id === previewId || pdfFile?.id === previewId) {
+            return;
+        }
+
+        const file = allFiles.find(f => f.id === previewId);
+        if (file) {
+            const contextFiles = allFiles.filter(f => f.type !== 'folder');
+            setPreviewContextFiles(contextFiles);
+            setPreviewContextIndex(contextFiles.findIndex((f) => f.id === previewId));
+
+            const isMedia = isMediaFile(file);
+            const isPdf = isPdfFile(file);
+
+            if (isMedia) {
+                setPlayingFile(file);
+                setPreviewFile(null);
+                setPdfFile(null);
+            } else if (isPdf) {
+                setPdfFile(file);
+                setPreviewFile(null);
+                setPlayingFile(null);
+            } else {
+                setPreviewFile(file);
+                setPlayingFile(null);
+                setPdfFile(null);
+            }
+        }
+    }, [previewId, allFiles, previewFile, playingFile, pdfFile]);
+
+    useEffect(() => {
         setSelectedIds([]);
         setShowMoveModal(false);
         setMoveConflictStrategy('keep_both');
         setSearchTerm("");
         setSearchResults([]);
-        setPreviewFile(null);
-        setPlayingFile(null);
-        setPdfFile(null);
         setPreviewContextFiles([]);
         setPreviewContextIndex(-1);
         setRenameTarget(null);
@@ -715,33 +754,18 @@ const EMPTY_FILES_ARRAY: TelegramFile[] = [];
         }
 
         const contextFiles = (orderedFiles || displayedFiles).filter((f) => f.type !== 'folder');
-        const contextIndex = contextFiles.findIndex((f) => f.id === file.id);
-
         setPreviewContextFiles(contextFiles);
-        setPreviewContextIndex(contextIndex);
+        setPreviewContextIndex(contextFiles.findIndex((f) => f.id === file.id));
 
-        const isMedia = isMediaFile(file);
-        const isPdf = isPdfFile(file);
-
-        if (isMedia) {
-            setPlayingFile(file);
-            setPreviewFile(null);
-            setPdfFile(null);
-        } else if (isPdf) {
-            setPdfFile(file);
-            setPreviewFile(null);
-            setPlayingFile(null);
-        } else {
-            setPreviewFile(file);
-            setPlayingFile(null);
-            setPdfFile(null);
-        }
+        const newParams = new URLSearchParams(searchParams);
+        newParams.set('preview', file.id.toString());
+        setSearchParams(newParams);
     };
 
     const navigatePreview = useCallback((step: 1 | -1) => {
         if (previewContextFiles.length === 0) return;
 
-        const currentFileId = previewFile?.id ?? playingFile?.id ?? pdfFile?.id;
+        const currentFileId = previewId;
         if (!currentFileId) return;
 
         const currentIndex = previewContextFiles.findIndex((f) => f.id === currentFileId);
@@ -751,25 +775,10 @@ const EMPTY_FILES_ARRAY: TelegramFile[] = [];
         const nextFile = previewContextFiles[nextIndex];
         if (!nextFile) return;
 
-        setPreviewContextIndex(nextIndex);
-
-        const isMedia = isMediaFile(nextFile);
-        const isPdf = isPdfFile(nextFile);
-
-        if (isMedia) {
-            setPlayingFile(nextFile);
-            setPreviewFile(null);
-            setPdfFile(null);
-        } else if (isPdf) {
-            setPdfFile(nextFile);
-            setPreviewFile(null);
-            setPlayingFile(null);
-        } else {
-            setPreviewFile(nextFile);
-            setPlayingFile(null);
-            setPdfFile(null);
-        }
-    }, [previewContextFiles, previewFile, playingFile, pdfFile]);
+        const newParams = new URLSearchParams(searchParams);
+        newParams.set('preview', nextFile.id.toString());
+        setSearchParams(newParams, { replace: true });
+    }, [previewContextFiles, previewId, searchParams, setSearchParams]);
 
     const handleNextPreview = useCallback(() => {
         navigatePreview(1);
@@ -1551,7 +1560,11 @@ const EMPTY_FILES_ARRAY: TelegramFile[] = [];
                 {playingFile && (
                     <MediaPlayer
                         file={playingFile}
-                        onClose={() => setPlayingFile(null)}
+                        onClose={() => {
+                            const newParams = new URLSearchParams(searchParams);
+                            newParams.delete('preview');
+                            setSearchParams(newParams);
+                        }}
                         onNext={handleNextPreview}
                         onPrev={handlePrevPreview}
                         onDelete={handlePreviewDelete}
@@ -1564,7 +1577,11 @@ const EMPTY_FILES_ARRAY: TelegramFile[] = [];
                 {pdfFile && (
                     <PdfViewer
                         file={pdfFile}
-                        onClose={() => setPdfFile(null)}
+                        onClose={() => {
+                            const newParams = new URLSearchParams(searchParams);
+                            newParams.delete('preview');
+                            setSearchParams(newParams);
+                        }}
                         onNext={handleNextPreview}
                         onPrev={handlePrevPreview}
                         onDelete={handlePreviewDelete}
@@ -1786,7 +1803,11 @@ const EMPTY_FILES_ARRAY: TelegramFile[] = [];
                 <PreviewModal
                     file={previewFile}
                     activeFolderId={activeFolderId}
-                    onClose={() => setPreviewFile(null)}
+                    onClose={() => {
+                        const newParams = new URLSearchParams(searchParams);
+                        newParams.delete('preview');
+                        setSearchParams(newParams);
+                    }}
                     onNext={handleNextPreview}
                     onPrev={handlePrevPreview}
                     onDelete={handlePreviewDelete}
