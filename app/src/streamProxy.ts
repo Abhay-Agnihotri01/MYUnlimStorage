@@ -17,7 +17,7 @@ export function registerStreamProxyListener() {
                         type: 'CHUNK_DATA',
                         requestId: data.requestId,
                         data: {
-                            size: message.file?.size || record?.size || Math.max(1, record?.size || 0),
+                            size: parseInt(String(message.file?.size || record?.size || 1), 10),
                             mimeType: message.file?.mimeType || 'video/mp4'
                         }
                     });
