@@ -105,6 +105,7 @@ export function Dashboard({ onLogout }: { onLogout: () => void }) {
         
         if (newView !== driveView) {
             setDriveViewLocal(newView);
+            setSelectedIds([]);
         }
         
         setShowSettingsLocal(path === '/settings');
@@ -113,9 +114,15 @@ export function Dashboard({ onLogout }: { onLogout: () => void }) {
         if (newView === 'files') {
             if (folderMatch) {
                 const id = parseInt(folderMatch[1]);
-                if (activeFolderId !== id) setActiveFolderId(id);
+                if (activeFolderId !== id) {
+                    setActiveFolderId(id);
+                    setSelectedIds([]);
+                }
             } else if (path === '/drive' || path === '/') {
-                if (activeFolderId !== null) setActiveFolderId(null);
+                if (activeFolderId !== null) {
+                    setActiveFolderId(null);
+                    setSelectedIds([]);
+                }
             }
         }
     }, [location.pathname, activeFolderId, setActiveFolderId, driveView]);

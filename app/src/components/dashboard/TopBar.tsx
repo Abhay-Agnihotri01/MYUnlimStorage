@@ -40,6 +40,10 @@ export function TopBar({
         if (selectableCount === 0) setIsSelecting(false);
     }, [selectableCount]);
 
+    useEffect(() => {
+        setIsSelecting(false);
+    }, [currentFolderName]);
+
     const handleClearSelection = () => {
         setIsSelecting(false);
         onClearSelection();
