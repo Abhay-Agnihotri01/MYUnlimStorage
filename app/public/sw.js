@@ -100,10 +100,6 @@ self.addEventListener('fetch', (event) => {
                     });
                 }
 
-                const rangeHeader = event.request.headers.get('Range') || 'bytes=0-';
-                const match = rangeHeader.match(/bytes=(\d+)-(\d*)/);
-                let startByte = match ? parseInt(match[1], 10) : 0;
-                let endByte = match && match[2] ? parseInt(match[2], 10) : undefined;
 
                 if (endByte === undefined) {
                     endByte = Math.min(startByte + 5 * 1024 * 1024 - 1, fileInfo.size - 1);
