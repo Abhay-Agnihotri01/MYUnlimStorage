@@ -89,6 +89,12 @@ self.addEventListener('fetch', (event) => {
                             
                             controller.enqueue(new Uint8Array(chunkData));
                             currentByte = endByte + 1;
+                        },
+                        cancel() {
+                            client.postMessage({
+                                type: 'ABORT_CHUNK',
+                                messageId
+                            });
                         }
                     });
 
@@ -150,6 +156,12 @@ self.addEventListener('fetch', (event) => {
                         
                         controller.enqueue(new Uint8Array(chunkData));
                         currentByteRange = chunkEndByte + 1;
+                    },
+                    cancel() {
+                        client.postMessage({
+                            type: 'ABORT_CHUNK',
+                            messageId
+                        });
                     }
                 });
 

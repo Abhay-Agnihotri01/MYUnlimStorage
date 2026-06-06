@@ -46,8 +46,14 @@ export function MediaPlayer({ file, onClose, onNext, onPrev, onDelete, currentIn
         setStreamInfo(null);
         let objectUrl: string | null = null;
 
-        if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-            setBrowserUrl(`/stream/${file.id}`);
+        if (navigator.serviceWorker) {
+            if (navigator.serviceWorker.controller) {
+                setBrowserUrl(`/stream/${file.id}`);
+            } else {
+                navigator.serviceWorker.ready.then(() => {
+                    if (!cancelled) setBrowserUrl(`/stream/${file.id}`);
+                });
+            }
         } else {
             getBrowserFileObjectUrl(file.id).then((url) => {
                 if (cancelled) {

@@ -1,7 +1,7 @@
 import { getAuthorizedClient, getTelegramMessage, getDriveManifest } from './telegramBrowser';
 
 const CHUNK_SIZE = 1024 * 512; // 512 KB alignment
-const MAX_CACHE_SIZE = 30; // Max 15MB memory buffer
+const MAX_CACHE_SIZE = 50; // Max 25MB memory buffer
 
 interface CachedChunk {
     buffer: Uint8Array;
@@ -9,8 +9,9 @@ interface CachedChunk {
 }
 const chunkCache = new Map<string, CachedChunk>();
 const fetchPromises = new Map<string, Promise<Uint8Array>>();
+const abortControllers = new Map<number, AbortController>();
 
-async function getOrFetchChunk(messageId: number, alignedOffset: number): Promise<Uint8Array> {
+async function getOrFetchChunk(messageId: number, alignedOffset: number, signal?: AbortSignal): Promise<Uint8Array> {
     const key = `${messageId}_${alignedOffset}`;
     
     if (chunkCache.has(key)) {
@@ -37,6 +38,7 @@ async function getOrFetchChunk(messageId: number, alignedOffset: number): Promis
 
         const chunks: Uint8Array[] = [];
         for await (const chunk of iter) {
+            if (signal?.aborted) throw new Error('Aborted');
             chunks.push(chunk as Uint8Array);
         }
 
@@ -62,11 +64,15 @@ async function getOrFetchChunk(messageId: number, alignedOffset: number): Promis
         chunkCache.set(key, { buffer: combined, lastAccessed: Date.now() });
         fetchPromises.delete(key);
 
-        // Trigger read-ahead prebuffering for the NEXT chunk silently
-        const nextOffset = alignedOffset + CHUNK_SIZE;
-        const nextKey = `${messageId}_${nextOffset}`;
-        if (!chunkCache.has(nextKey) && !fetchPromises.has(nextKey)) {
-            getOrFetchChunk(messageId, nextOffset).catch(() => {}); // ignore read-ahead errors
+        // Trigger read-ahead prebuffering for the NEXT 4 chunks silently
+        if (!signal?.aborted) {
+            for (let i = 1; i <= 4; i++) {
+                const nextOffset = alignedOffset + (CHUNK_SIZE * i);
+                const nextKey = `${messageId}_${nextOffset}`;
+                if (!chunkCache.has(nextKey) && !fetchPromises.has(nextKey)) {
+                    getOrFetchChunk(messageId, nextOffset, signal).catch(() => {}); // ignore read-ahead errors
+                }
+            }
         }
 
         return combined;
@@ -102,18 +108,37 @@ export function registerStreamProxyListener() {
                 }
             }
 
+            if (data.type === 'ABORT_CHUNK') {
+                const messageId = data.messageId;
+                if (abortControllers.has(messageId)) {
+                    abortControllers.get(messageId)!.abort();
+                    abortControllers.delete(messageId);
+                }
+                for (const key of fetchPromises.keys()) {
+                    if (key.startsWith(`${messageId}_`)) {
+                        fetchPromises.delete(key);
+                    }
+                }
+            }
+
             if (data.type === 'GET_CHUNK') {
                 try {
                     const { messageId, startByte, endByte, requestId } = data;
                     
+                    if (!abortControllers.has(messageId)) {
+                        abortControllers.set(messageId, new AbortController());
+                    }
+                    const signal = abortControllers.get(messageId)!.signal;
+
                     const totalLength = endByte - startByte + 1;
                     const resultBuffer = new Uint8Array(totalLength);
                     let currentOffset = startByte;
                     let writeOffset = 0;
 
                     while (currentOffset <= endByte) {
+                        if (signal.aborted) throw new Error('Aborted');
                         const alignedOffset = Math.floor(currentOffset / CHUNK_SIZE) * CHUNK_SIZE;
-                        const chunkData = await getOrFetchChunk(messageId, alignedOffset);
+                        const chunkData = await getOrFetchChunk(messageId, alignedOffset, signal);
                         
                         const chunkStart = Math.max(currentOffset, alignedOffset);
                         const chunkEnd = Math.min(endByte, alignedOffset + CHUNK_SIZE - 1);
