@@ -62,7 +62,7 @@ export function registerStreamProxyListener() {
                     const exactEnd = endByte - alignedOffset + 1;
                     const exactChunk = combined.slice(exactOffset, exactEnd);
 
-                    event.source?.postMessage({
+                    (event.source as any)?.postMessage({
                         type: 'CHUNK_DATA',
                         requestId,
                         data: exactChunk.buffer
