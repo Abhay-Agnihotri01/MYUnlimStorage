@@ -41,7 +41,7 @@ const OFFLINE_CACHE_STORE = 'blobs';
 const OFFLINE_CACHE_INDEX_KEY = 'telegram-drive-offline-cache-index';
 const OFFLINE_CACHE_MAX_ITEMS = 80;
 const OFFLINE_CACHE_MAX_BYTES = 512 * 1024 * 1024;
-const thumbnailCache = new Map<number, Blob>();
+const thumbnailCache = new Map<number, string>();
 const MANIFEST_MARKER = '[telegram-drive-manifest-v1]';
 const MANIFEST_FILENAME = '.telegram-drive-manifest.json';
 const MANIFEST_BACKUP_COUNT = 5;
@@ -1693,8 +1693,7 @@ export async function telegramDownloadThumbnailBlob(messageId: number): Promise<
 
 export async function telegramGetThumbnailObjectUrl(messageId: number): Promise<string> {
     if (thumbnailCache.has(messageId)) {
-        const cachedBlob = thumbnailCache.get(messageId) as Blob;
-        return URL.createObjectURL(cachedBlob);
+        return thumbnailCache.get(messageId)!;
     }
     
     if (pendingThumbnails.has(messageId)) {
@@ -1704,8 +1703,9 @@ export async function telegramGetThumbnailObjectUrl(messageId: number): Promise<
     const promise = (async () => {
         try {
             const { blob } = await telegramDownloadThumbnailBlob(messageId);
-            thumbnailCache.set(messageId, blob);
-            return URL.createObjectURL(blob);
+            const objectUrl = URL.createObjectURL(blob);
+            thumbnailCache.set(messageId, objectUrl);
+            return objectUrl;
         } finally {
             pendingThumbnails.delete(messageId);
         }

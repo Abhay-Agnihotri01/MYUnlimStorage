@@ -78,7 +78,6 @@ export function FileCard({
         }).then((result) => {
             if (!result) return;
             if (cancelled) {
-                if (result.startsWith('blob:')) URL.revokeObjectURL(result);
                 return;
             }
             thumbnailUrl = result;
@@ -91,7 +90,6 @@ export function FileCard({
 
         return () => {
             cancelled = true;
-            if (thumbnailUrl?.startsWith('blob:')) URL.revokeObjectURL(thumbnailUrl);
         };
     }, [file.id, file.name, activeFolderId, isFolder]);
 
