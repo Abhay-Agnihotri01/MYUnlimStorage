@@ -292,12 +292,12 @@ jobs:
       - name: Install Android SDK packages
         run: |
           set -euo pipefail
-          sdkmanager --install \
+          yes | sdkmanager --licenses >/dev/null || true
+          yes | sdkmanager --install \
             "platform-tools" \
             "platforms;android-35" \
             "build-tools;35.0.0" \
             "ndk;27.2.12479018"
-          yes | sdkmanager --licenses >/dev/null || true
           echo "NDK_HOME=${ANDROID_HOME}/ndk/27.2.12479018" >> "$GITHUB_ENV"
 
       - name: Install Rust stable
