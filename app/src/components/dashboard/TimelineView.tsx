@@ -143,7 +143,19 @@ export function TimelineView({
                 <h2 className="text-2xl font-bold text-telegram-text">Timeline</h2>
             </div>
 
-            {buckets.length === 0 && !loading ? (
+            {loading ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                        <div key={`skeleton-${i}`} className="group relative flex flex-col bg-telegram-surface rounded-xl border border-telegram-border overflow-hidden animate-pulse">
+                            <div className="aspect-square bg-telegram-hover"></div>
+                            <div className="p-3">
+                                <div className="h-4 bg-telegram-hover rounded w-3/4 mb-2"></div>
+                                <div className="h-3 bg-telegram-hover rounded w-1/4"></div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+            ) : buckets.length === 0 ? (
                 <div className="flex flex-col items-center justify-center text-telegram-subtext p-8 text-center mt-12">
                     <Calendar className="w-16 h-16 mb-4 opacity-50" />
                     <h3 className="text-lg font-medium text-telegram-text mb-2">No Files Found</h3>

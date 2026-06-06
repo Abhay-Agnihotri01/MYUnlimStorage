@@ -131,7 +131,7 @@ export function FileExplorer({
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; file: TelegramFile } | null>(null);
 
     const parentRef = useRef<HTMLDivElement>(null);
-    const gridReady = !loading && !error && files.length > 0;
+    const gridReady = !error;
     const { columns, containerWidth } = useGridColumns(parentRef, gridReady);
     const selectionMode = selectedIds.length > 0;
 
@@ -218,20 +218,11 @@ export function FileExplorer({
             : <ArrowDown className="w-3 h-3 text-telegram-primary" />;
     };
 
-    if (loading) {
-        return (
-            <div className="flex flex-1 flex-col items-center justify-center gap-4 p-3 text-telegram-subtext sm:p-4 md:p-6">
-                <div className="w-8 h-8 border-4 border-telegram-primary border-t-transparent rounded-full animate-spin"></div>
-                Loading your files...
-            </div>
-        )
-    }
-
     if (error) {
         return <div className="flex flex-1 items-center justify-center p-3 text-red-400 sm:p-4 md:p-6">Error loading files</div>
     }
 
-    if (files.length === 0) {
+    if (files.length === 0 && !loading) {
         if (!allowUpload) {
             return (
                 <div className="flex flex-1 items-center justify-center p-3 text-telegram-subtext sm:p-4 md:p-6">
@@ -254,7 +245,46 @@ export function FileExplorer({
                 if (e.target === e.currentTarget) onSelectionClear();
             }}
         >
-            {viewMode === 'grid' ? (
+            {loading ? (
+                viewMode === 'grid' ? (
+                    <div className="w-full grid" style={{
+                        gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+                        gap: `${GAP}px`,
+                    }}>
+                        {Array.from({ length: columns * 4 }).map((_, i) => (
+                            <div key={`skeleton-${i}`} className="flex flex-col rounded-xl border border-telegram-border bg-telegram-surface overflow-hidden animate-pulse" style={{ height: `${cardHeight}px` }}>
+                                <div className="flex-1 bg-telegram-hover"></div>
+                                <div className="p-3 bg-telegram-surface flex flex-col gap-2 shrink-0">
+                                    <div className="h-4 bg-telegram-hover rounded w-3/4"></div>
+                                    <div className="h-3 bg-telegram-hover rounded w-1/2"></div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                ) : (
+                    <div className="flex w-full flex-col">
+                        <div className="mb-2 grid grid-cols-[2rem_minmax(0,1fr)_5rem] items-center gap-2 border-b border-telegram-border px-3 py-2 text-xs font-semibold text-telegram-subtext select-none md:grid-cols-[2rem_2fr_6rem_8rem] md:gap-4 md:px-4">
+                            <div className="text-center">#</div>
+                            <div>Name</div>
+                            <div className="text-right">Size</div>
+                            <div className="hidden text-right md:block">Date</div>
+                        </div>
+                        <div className="flex flex-col relative w-full gap-1">
+                            {Array.from({ length: 15 }).map((_, i) => (
+                                <div key={`skeleton-list-${i}`} className="grid grid-cols-[2rem_minmax(0,1fr)_5rem] items-center gap-2 px-3 py-2 md:grid-cols-[2rem_2fr_6rem_8rem] md:gap-4 md:px-4 rounded-lg bg-telegram-surface/50 border border-telegram-border/50 animate-pulse h-12">
+                                    <div className="w-6 h-6 rounded bg-telegram-hover mx-auto"></div>
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded bg-telegram-hover shrink-0"></div>
+                                        <div className="h-4 bg-telegram-hover rounded w-1/2"></div>
+                                    </div>
+                                    <div className="h-4 bg-telegram-hover rounded w-full"></div>
+                                    <div className="hidden md:block h-4 bg-telegram-hover rounded w-full"></div>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                )
+            ) : viewMode === 'grid' ? (
                 <>
 
                     <div className="mb-3 flex flex-wrap items-center gap-1.5 text-xs text-telegram-subtext md:mb-4 md:gap-2">
