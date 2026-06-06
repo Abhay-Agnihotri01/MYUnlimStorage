@@ -53,7 +53,7 @@ self.addEventListener('fetch', (event) => {
                 }
 
                 if (endByte === undefined) {
-                    endByte = Math.min(startByte + 1024 * 1024 - 1, fileInfo.size - 1);
+                    endByte = Math.min(startByte + 5 * 1024 * 1024 - 1, fileInfo.size - 1);
                 } else if (endByte >= fileInfo.size) {
                     endByte = fileInfo.size - 1;
                 }

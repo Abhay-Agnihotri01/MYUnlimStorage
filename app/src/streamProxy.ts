@@ -1,5 +1,81 @@
 import { getAuthorizedClient, getTelegramMessage, getDriveManifest } from './telegramBrowser';
 
+const CHUNK_SIZE = 1024 * 512; // 512 KB alignment
+const MAX_CACHE_SIZE = 30; // Max 15MB memory buffer
+
+interface CachedChunk {
+    buffer: Uint8Array;
+    lastAccessed: number;
+}
+const chunkCache = new Map<string, CachedChunk>();
+const fetchPromises = new Map<string, Promise<Uint8Array>>();
+
+async function getOrFetchChunk(messageId: number, alignedOffset: number): Promise<Uint8Array> {
+    const key = `${messageId}_${alignedOffset}`;
+    
+    if (chunkCache.has(key)) {
+        const cached = chunkCache.get(key)!;
+        cached.lastAccessed = Date.now();
+        return cached.buffer;
+    }
+    
+    if (fetchPromises.has(key)) {
+        return fetchPromises.get(key)!;
+    }
+
+    const promise = (async () => {
+        const client = await getAuthorizedClient();
+        const message = await getTelegramMessage(messageId);
+        const bigInt = (await import('big-integer')).default;
+
+        const iter = client.iterDownload({
+            file: message.media,
+            offset: bigInt(alignedOffset),
+            limit: 1,
+            requestSize: CHUNK_SIZE
+        });
+
+        const chunks: Uint8Array[] = [];
+        for await (const chunk of iter) {
+            chunks.push(chunk as Uint8Array);
+        }
+
+        const combined = new Uint8Array(chunks.reduce((acc, c) => acc + c.length, 0));
+        let offset = 0;
+        for (const c of chunks) {
+            combined.set(c, offset);
+            offset += c.length;
+        }
+
+        if (chunkCache.size >= MAX_CACHE_SIZE) {
+            let oldestKey = '';
+            let oldestTime = Infinity;
+            for (const [k, v] of chunkCache.entries()) {
+                if (v.lastAccessed < oldestTime) {
+                    oldestTime = v.lastAccessed;
+                    oldestKey = k;
+                }
+            }
+            if (oldestKey) chunkCache.delete(oldestKey);
+        }
+
+        chunkCache.set(key, { buffer: combined, lastAccessed: Date.now() });
+        fetchPromises.delete(key);
+
+        // Trigger read-ahead prebuffering for the NEXT chunk silently
+        const nextOffset = alignedOffset + CHUNK_SIZE;
+        const nextKey = `${messageId}_${nextOffset}`;
+        if (!chunkCache.has(nextKey) && !fetchPromises.has(nextKey)) {
+            getOrFetchChunk(messageId, nextOffset).catch(() => {}); // ignore read-ahead errors
+        }
+
+        return combined;
+    })();
+
+    fetchPromises.set(key, promise);
+    return promise;
+}
+
 export function registerStreamProxyListener() {
     if ('serviceWorker' in navigator) {
         navigator.serviceWorker.addEventListener('message', async (event) => {
@@ -29,48 +105,49 @@ export function registerStreamProxyListener() {
             if (data.type === 'GET_CHUNK') {
                 try {
                     const { messageId, startByte, endByte, requestId } = data;
-                    const client = await getAuthorizedClient();
-                    const message = await getTelegramMessage(messageId);
                     
-                    const CHUNK_SIZE = 1024 * 512; // 512 KB alignment
-                    const alignedOffset = Math.floor(startByte / CHUNK_SIZE) * CHUNK_SIZE;
-                    const bytesToFetch = endByte - alignedOffset + 1;
-                    const limit = Math.ceil(bytesToFetch / CHUNK_SIZE);
-                    const bigInt = (await import('big-integer')).default;
+                    const totalLength = endByte - startByte + 1;
+                    const resultBuffer = new Uint8Array(totalLength);
+                    let currentOffset = startByte;
+                    let writeOffset = 0;
 
-                    const iter = client.iterDownload({
-                        file: message.media,
-                        offset: bigInt(alignedOffset),
-                        limit: limit,
-                        requestSize: CHUNK_SIZE
-                    });
-
-                    const chunks: Uint8Array[] = [];
-                    for await (const chunk of iter) {
-                        chunks.push(chunk as Uint8Array);
+                    while (currentOffset <= endByte) {
+                        const alignedOffset = Math.floor(currentOffset / CHUNK_SIZE) * CHUNK_SIZE;
+                        const chunkData = await getOrFetchChunk(messageId, alignedOffset);
+                        
+                        const chunkStart = Math.max(currentOffset, alignedOffset);
+                        const chunkEnd = Math.min(endByte, alignedOffset + CHUNK_SIZE - 1);
+                        const length = chunkEnd - chunkStart + 1;
+                        
+                        const sourceOffset = chunkStart - alignedOffset;
+                        const availableLength = chunkData.length - sourceOffset;
+                        const actualLength = Math.min(length, Math.max(0, availableLength));
+                        
+                        if (actualLength > 0) {
+                            resultBuffer.set(chunkData.subarray(sourceOffset, sourceOffset + actualLength), writeOffset);
+                        }
+                        
+                        currentOffset += length;
+                        writeOffset += actualLength;
+                        
+                        if (actualLength < length) {
+                            // Reached EOF early
+                            break;
+                        }
                     }
 
-                    const totalLength = chunks.reduce((acc, c) => acc + c.length, 0);
-                    const combined = new Uint8Array(totalLength);
-                    let offset = 0;
-                    for (const c of chunks) {
-                        combined.set(c, offset);
-                        offset += c.length;
-                    }
-
-                    const exactOffset = startByte - alignedOffset;
-                    const exactEnd = endByte - alignedOffset + 1;
-                    const exactChunk = combined.slice(exactOffset, exactEnd);
+                    const finalBuffer = writeOffset < totalLength ? resultBuffer.subarray(0, writeOffset) : resultBuffer;
+                    const copy = new Uint8Array(finalBuffer);
 
                     (event.source as any)?.postMessage({
                         type: 'CHUNK_DATA',
                         requestId,
-                        data: exactChunk.buffer
-                    }, [exactChunk.buffer]);
+                        data: copy.buffer
+                    }, [copy.buffer]);
 
                 } catch (e) {
                     console.error('StreamProxy chunk error:', e);
-                    event.source?.postMessage({ type: 'CHUNK_DATA', requestId: data.requestId, data: new ArrayBuffer(0) });
+                    (event.source as any)?.postMessage({ type: 'CHUNK_DATA', requestId: data.requestId, data: new ArrayBuffer(0) });
                 }
             }
         });
