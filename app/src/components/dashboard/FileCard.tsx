@@ -68,7 +68,6 @@ export function FileCard({
         }
 
         let cancelled = false;
-        let thumbnailUrl: string | null = null;
         setThumbnailLoading(true);
         setThumbnail(null);
 
@@ -80,7 +79,6 @@ export function FileCard({
             if (cancelled) {
                 return;
             }
-            thumbnailUrl = result;
             setThumbnail(result);
         }).catch(() => {
             // Thumbnail failures should not block browsing.
