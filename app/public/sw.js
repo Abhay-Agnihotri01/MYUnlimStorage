@@ -55,38 +55,40 @@ self.addEventListener('fetch', (event) => {
                 const hasRange = event.request.headers.has('Range');
 
                 if (!hasRange) {
+                    let currentByte = 0;
+                    const CHUNK_SIZE = 512 * 1024; // 512KB chunks
+
                     const stream = new ReadableStream({
-                        async start(controller) {
-                            let currentByte = 0;
-                            const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB chunks
-
-                            while (currentByte < fileInfo.size) {
-                                const endByte = Math.min(currentByte + CHUNK_SIZE - 1, fileInfo.size - 1);
-                                
-                                const chunkRequestId = crypto.randomUUID();
-                                const chunkPromise = new Promise((resolve) => {
-                                    pendingRequests.set(chunkRequestId, resolve);
-                                });
-
-                                client.postMessage({
-                                    type: 'GET_CHUNK',
-                                    messageId,
-                                    startByte: currentByte,
-                                    endByte,
-                                    requestId: chunkRequestId
-                                });
-
-                                const chunkData = await chunkPromise;
-                                
-                                if (!chunkData || chunkData.byteLength === 0) {
-                                    controller.error('Failed to fetch chunk');
-                                    break;
-                                }
-                                
-                                controller.enqueue(new Uint8Array(chunkData));
-                                currentByte = endByte + 1;
+                        async pull(controller) {
+                            if (currentByte >= fileInfo.size) {
+                                controller.close();
+                                return;
                             }
-                            controller.close();
+
+                            const endByte = Math.min(currentByte + CHUNK_SIZE - 1, fileInfo.size - 1);
+                            
+                            const chunkRequestId = crypto.randomUUID();
+                            const chunkPromise = new Promise((resolve) => {
+                                pendingRequests.set(chunkRequestId, resolve);
+                            });
+
+                            client.postMessage({
+                                type: 'GET_CHUNK',
+                                messageId,
+                                startByte: currentByte,
+                                endByte,
+                                requestId: chunkRequestId
+                            });
+
+                            const chunkData = await chunkPromise;
+                            
+                            if (!chunkData || chunkData.byteLength === 0) {
+                                controller.error('Failed to fetch chunk');
+                                return;
+                            }
+                            
+                            controller.enqueue(new Uint8Array(chunkData));
+                            currentByte = endByte + 1;
                         }
                     });
 
@@ -100,9 +102,9 @@ self.addEventListener('fetch', (event) => {
                     });
                 }
 
-
+                // --- Range Request Handling ---
                 if (endByte === undefined) {
-                    endByte = Math.min(startByte + 5 * 1024 * 1024 - 1, fileInfo.size - 1);
+                    endByte = fileInfo.size - 1;
                 } else if (endByte >= fileInfo.size) {
                     endByte = fileInfo.size - 1;
                 }
@@ -114,22 +116,44 @@ self.addEventListener('fetch', (event) => {
                     });
                 }
 
-                const chunkRequestId = crypto.randomUUID();
-                const chunkPromise = new Promise((resolve) => {
-                    pendingRequests.set(chunkRequestId, resolve);
+                let currentByteRange = startByte;
+                const CHUNK_SIZE_RANGE = 512 * 1024; // 512KB chunks for range requests too
+
+                const streamRange = new ReadableStream({
+                    async pull(controller) {
+                        if (currentByteRange > endByte) {
+                            controller.close();
+                            return;
+                        }
+
+                        const chunkEndByte = Math.min(currentByteRange + CHUNK_SIZE_RANGE - 1, endByte);
+                        
+                        const chunkRequestId = crypto.randomUUID();
+                        const chunkPromise = new Promise((resolve) => {
+                            pendingRequests.set(chunkRequestId, resolve);
+                        });
+
+                        client.postMessage({
+                            type: 'GET_CHUNK',
+                            messageId,
+                            startByte: currentByteRange,
+                            endByte: chunkEndByte,
+                            requestId: chunkRequestId
+                        });
+
+                        const chunkData = await chunkPromise;
+                        
+                        if (!chunkData || chunkData.byteLength === 0) {
+                            controller.error('Failed to fetch chunk');
+                            return;
+                        }
+                        
+                        controller.enqueue(new Uint8Array(chunkData));
+                        currentByteRange = chunkEndByte + 1;
+                    }
                 });
 
-                client.postMessage({
-                    type: 'GET_CHUNK',
-                    messageId,
-                    startByte,
-                    endByte,
-                    requestId: chunkRequestId
-                });
-
-                const chunkData = await chunkPromise;
-
-                return new Response(chunkData, {
+                return new Response(streamRange, {
                     status: 206,
                     headers: {
                         'Content-Type': fileInfo.mimeType || 'video/mp4',
