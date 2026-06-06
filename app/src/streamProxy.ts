@@ -10,6 +10,7 @@ interface CachedChunk {
 const chunkCache = new Map<string, CachedChunk>();
 const fetchPromises = new Map<string, Promise<Uint8Array>>();
 const abortControllers = new Map<number, AbortController>();
+let downloadMutex = Promise.resolve();
 
 async function getOrFetchChunk(messageId: number, alignedOffset: number, signal?: AbortSignal): Promise<Uint8Array> {
     const key = `${messageId}_${alignedOffset}`;
@@ -24,59 +25,76 @@ async function getOrFetchChunk(messageId: number, alignedOffset: number, signal?
         return fetchPromises.get(key)!;
     }
 
-    const promise = (async () => {
-        const client = await getAuthorizedClient();
-        const message = await getTelegramMessage(messageId);
-        const bigInt = (await import('big-integer')).default;
-
-        const iter = client.iterDownload({
-            file: message.media,
-            offset: bigInt(alignedOffset),
-            limit: 1,
-            requestSize: CHUNK_SIZE
-        });
-
-        const chunks: Uint8Array[] = [];
-        for await (const chunk of iter) {
-            if (signal?.aborted) throw new Error('Aborted');
-            chunks.push(chunk as Uint8Array);
-        }
-
-        const combined = new Uint8Array(chunks.reduce((acc, c) => acc + c.length, 0));
-        let offset = 0;
-        for (const c of chunks) {
-            combined.set(c, offset);
-            offset += c.length;
-        }
-
-        if (chunkCache.size >= MAX_CACHE_SIZE) {
-            let oldestKey = '';
-            let oldestTime = Infinity;
-            for (const [k, v] of chunkCache.entries()) {
-                if (v.lastAccessed < oldestTime) {
-                    oldestTime = v.lastAccessed;
-                    oldestKey = k;
-                }
+    const promise = new Promise<Uint8Array>((resolve, reject) => {
+        downloadMutex = downloadMutex.then(async () => {
+            if (signal?.aborted) {
+                reject(new Error('Aborted'));
+                return;
             }
-            if (oldestKey) chunkCache.delete(oldestKey);
-        }
 
-        chunkCache.set(key, { buffer: combined, lastAccessed: Date.now() });
-        fetchPromises.delete(key);
+            try {
+                const client = await getAuthorizedClient();
+                const message = await getTelegramMessage(messageId);
+                const bigInt = (await import('big-integer')).default;
 
-        // Trigger read-ahead prebuffering for the NEXT 4 chunks silently
-        if (!signal?.aborted) {
-            for (let i = 1; i <= 4; i++) {
-                const nextOffset = alignedOffset + (CHUNK_SIZE * i);
-                const nextKey = `${messageId}_${nextOffset}`;
-                if (!chunkCache.has(nextKey) && !fetchPromises.has(nextKey)) {
-                    getOrFetchChunk(messageId, nextOffset, signal).catch(() => {}); // ignore read-ahead errors
+                const iter = client.iterDownload({
+                    file: message.media,
+                    offset: bigInt(alignedOffset),
+                    limit: 1,
+                    requestSize: CHUNK_SIZE
+                });
+
+                const chunks: Uint8Array[] = [];
+                for await (const chunk of iter) {
+                    if (signal?.aborted) throw new Error('Aborted');
+                    chunks.push(chunk as Uint8Array);
                 }
-            }
-        }
 
-        return combined;
-    })();
+                const combined = new Uint8Array(chunks.reduce((acc, c) => acc + c.length, 0));
+                let offset = 0;
+                for (const c of chunks) {
+                    combined.set(c, offset);
+                    offset += c.length;
+                }
+
+                if (chunkCache.size >= MAX_CACHE_SIZE) {
+                    let oldestKey = '';
+                    let oldestTime = Infinity;
+                    for (const [k, v] of chunkCache.entries()) {
+                        if (v.lastAccessed < oldestTime) {
+                            oldestTime = v.lastAccessed;
+                            oldestKey = k;
+                        }
+                    }
+                    if (oldestKey) chunkCache.delete(oldestKey);
+                }
+
+                chunkCache.set(key, { buffer: combined, lastAccessed: Date.now() });
+                fetchPromises.delete(key);
+
+                resolve(combined);
+
+                // Trigger read-ahead prebuffering sequentially
+                if (!signal?.aborted) {
+                    (async () => {
+                        for (let i = 1; i <= 4; i++) {
+                            if (signal?.aborted) break;
+                            const nextOffset = alignedOffset + (CHUNK_SIZE * i);
+                            const nextKey = `${messageId}_${nextOffset}`;
+                            if (!chunkCache.has(nextKey) && !fetchPromises.has(nextKey)) {
+                                try {
+                                    await getOrFetchChunk(messageId, nextOffset, signal);
+                                } catch (e) { break; }
+                            }
+                        }
+                    })();
+                }
+            } catch (e) {
+                fetchPromises.delete(key);
+                reject(e);
+            }
+        }).catch(() => {});
+    });
 
     fetchPromises.set(key, promise);
     return promise;
