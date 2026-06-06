@@ -156,6 +156,7 @@ export function PreviewModal({
     activeFolderId,
 }: PreviewModalProps) {
     const [src, setSrc] = useState<string | null>(null);
+    const [thumbSrc, setThumbSrc] = useState<string | null>(null);
     const [textContent, setTextContent] = useState<string | null>(null);
     const [htmlContent, setHtmlContent] = useState<string | null>(null);
     const [sheetPreview, setSheetPreview] = useState<SpreadsheetPreview | null>(null);
@@ -182,6 +183,7 @@ export function PreviewModal({
         setRetryCount(0);
         setReloadNonce(0);
         setSrc(null);
+        setThumbSrc(null);
         setTextContent(null);
         setHtmlContent(null);
         setSheetPreview(null);
@@ -216,6 +218,7 @@ export function PreviewModal({
             setLoading(true);
             setError(null);
             setSrc(null);
+            setThumbSrc(null);
             setTextContent(null);
             setHtmlContent(null);
             setSheetPreview(null);
@@ -233,11 +236,11 @@ export function PreviewModal({
                         if (!thumbPath || requestId !== latestRequestRef.current) return;
                         
                         if (thumbPath.startsWith('data:') || thumbPath.startsWith('blob:') || thumbPath.startsWith('http')) {
-                            setSrc((currentSrc) => currentSrc ? currentSrc : thumbPath);
+                            setThumbSrc(thumbPath);
                         } else {
                             const normalized = await toAssetUrl(thumbPath);
                             if (requestId === latestRequestRef.current) {
-                                setSrc((currentSrc) => currentSrc ? currentSrc : normalized);
+                                setThumbSrc(normalized);
                             }
                         }
                     }).catch(() => { /* ignore */ });
@@ -454,7 +457,9 @@ export function PreviewModal({
                     <div className="flex h-full w-full flex-col items-center justify-center">
                         {imagePreview ? (
                             <ZoomableImagePreview
+                                key={file.id}
                                 src={src}
+                                thumbSrc={thumbSrc}
                                 alt={file.name}
                                 controlsVisible={chromeVisible}
                                 onToggleChrome={() => setChromeVisible((visible) => !visible)}
@@ -769,12 +774,14 @@ function getPreviewSubtitle(file: TelegramFile, currentIndex?: number, totalItem
 
 function ZoomableImagePreview({
     src,
+    thumbSrc,
     alt,
     controlsVisible,
     onToggleChrome,
     onError,
 }: {
     src: string;
+    thumbSrc?: string | null;
     alt: string;
     controlsVisible: boolean;
     onToggleChrome: () => void;
@@ -783,6 +790,7 @@ function ZoomableImagePreview({
     const [scale, setScale] = useState(1);
     const [rotation, setRotation] = useState(0);
     const [offset, setOffset] = useState({ x: 0, y: 0 });
+    const [isLoading, setIsLoading] = useState(true);
     const dragRef = useRef<{ pointerId: number; x: number; y: number; offsetX: number; offsetY: number } | null>(null);
     const activePointersRef = useRef(new Map<number, PreviewPointer>());
     const pinchRef = useRef<{ distance: number; scale: number } | null>(null);
@@ -793,6 +801,7 @@ function ZoomableImagePreview({
         setScale(1);
         setRotation(0);
         setOffset({ x: 0, y: 0 });
+        setIsLoading(true);
         dragRef.current = null;
         pinchRef.current = null;
         activePointersRef.current.clear();
@@ -923,6 +932,11 @@ function ZoomableImagePreview({
         }
     };
 
+    const transformStyle = {
+        transform: `translate3d(${offset.x}px, ${offset.y}px, 0) rotate(${rotation}deg) scale(${scale})`,
+        transition: dragRef.current ? 'none' : 'transform 120ms ease-out',
+    };
+
     return (
         <div
             className="relative flex h-full w-full items-center justify-center overflow-hidden bg-black"
@@ -956,18 +970,33 @@ function ZoomableImagePreview({
             }}
             style={{ touchAction: 'none' }}
         >
+            {isLoading && (
+                <div className="absolute inset-0 z-0 flex flex-col items-center justify-center gap-4 text-white">
+                    <div className="h-10 w-10 animate-spin rounded-full border-4 border-telegram-primary border-t-transparent"></div>
+                </div>
+            )}
+            {thumbSrc && isLoading && (
+                <img
+                    src={thumbSrc}
+                    className="absolute z-0 max-h-[100dvh] max-w-[100vw] select-none object-contain opacity-50 blur-xl"
+                    alt={`${alt} thumbnail`}
+                    draggable={false}
+                    style={transformStyle}
+                />
+            )}
             <img
                 src={src}
-                className={`max-h-[100dvh] max-w-[100vw] select-none object-contain ${scale > 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in'}`}
+                className={`z-10 max-h-[100dvh] max-w-[100vw] select-none object-contain transition-opacity duration-300 ${isLoading ? 'opacity-0' : 'opacity-100'} ${scale > 1 ? 'cursor-grab active:cursor-grabbing' : 'cursor-zoom-in'}`}
                 alt={alt}
                 draggable={false}
-                onError={onError}
-                style={{
-                    transform: `translate3d(${offset.x}px, ${offset.y}px, 0) rotate(${rotation}deg) scale(${scale})`,
-                    transition: dragRef.current ? 'none' : 'transform 120ms ease-out',
+                onLoad={() => setIsLoading(false)}
+                onError={() => {
+                    setIsLoading(false);
+                    onError();
                 }}
+                style={transformStyle}
             />
-            <div className={`absolute bottom-5 left-1/2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/10 bg-black/55 p-1.5 text-white shadow-2xl backdrop-blur transition-all duration-200 ${controlsVisible ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-4 opacity-0'}`}>
+            <div className={`absolute bottom-5 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2 rounded-full border border-white/10 bg-black/55 p-1.5 text-white shadow-2xl backdrop-blur transition-all duration-200 ${controlsVisible ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-4 opacity-0'}`}>
                 <button type="button" className="rounded-full p-2 text-white/70 hover:bg-white/10 hover:text-white" onClick={(event) => { event.stopPropagation(); zoomBy(-0.25); }} title="Zoom out">
                     <ZoomOut className="h-4 w-4" />
                 </button>
