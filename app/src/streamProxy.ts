@@ -1,7 +1,7 @@
 import { getAuthorizedClient, getTelegramMessage, getDriveManifest, runWithGlobalNetworkMutex } from './telegramBrowser';
 
-const CHUNK_SIZE = 1024 * 512; // 512 KB alignment
-const MAX_CACHE_SIZE = 50; // Max 25MB memory buffer
+const CHUNK_SIZE = 1024 * 1024 * 4; // 4 MB alignment
+const MAX_CACHE_SIZE = 15; // Max 60MB memory buffer
 
 interface CachedChunk {
     buffer: Uint8Array;
@@ -39,8 +39,8 @@ async function getOrFetchChunk(messageId: number, alignedOffset: number, signal?
                 const iter = client.iterDownload({
                     file: message.media,
                     offset: bigInt(alignedOffset),
-                    limit: 1,
-                    requestSize: CHUNK_SIZE
+                    limit: 4, // 4 x 1MB chunks = 4MB total
+                    requestSize: 1024 * 1024 // 1 MB is MTProto max
                 });
 
                 const chunks: Uint8Array[] = [];
@@ -76,7 +76,7 @@ async function getOrFetchChunk(messageId: number, alignedOffset: number, signal?
                 // Trigger read-ahead prebuffering sequentially
                 if (!signal?.aborted) {
                     (async () => {
-                        for (let i = 1; i <= 4; i++) {
+                        for (let i = 1; i <= 1; i++) {
                             if (signal?.aborted) break;
                             const nextOffset = alignedOffset + (CHUNK_SIZE * i);
                             const nextKey = `${messageId}_${nextOffset}`;
