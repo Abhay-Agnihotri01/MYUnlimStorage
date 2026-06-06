@@ -201,6 +201,22 @@ let remoteManifestWrite: Promise<void> = Promise.resolve();
 let nextTelegramUploadAt = 0;
 const unlockedProtectedItems = new Set<string>();
 
+const pendingThumbnails = new Map<number, Promise<string>>();
+let globalNetworkMutex = Promise.resolve();
+
+export async function runWithGlobalNetworkMutex<T>(task: () => Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+        globalNetworkMutex = globalNetworkMutex.then(async () => {
+            try {
+                const result = await task();
+                resolve(result);
+            } catch (e) {
+                reject(e);
+            }
+        }).catch(() => {});
+    });
+}
+
 function getActiveAccountId(): string {
     return localStorage.getItem(ACTIVE_ACCOUNT_KEY) || 'default';
 }
@@ -1653,10 +1669,23 @@ export async function telegramGetThumbnailObjectUrl(messageId: number): Promise<
         const cachedBlob = thumbnailCache.get(messageId) as Blob;
         return URL.createObjectURL(cachedBlob);
     }
+    
+    if (pendingThumbnails.has(messageId)) {
+        return pendingThumbnails.get(messageId)!;
+    }
 
-    const { blob } = await telegramDownloadThumbnailBlob(messageId);
-    thumbnailCache.set(messageId, blob);
-    return URL.createObjectURL(blob);
+    const promise = (async () => {
+        try {
+            const { blob } = await telegramDownloadThumbnailBlob(messageId);
+            thumbnailCache.set(messageId, blob);
+            return URL.createObjectURL(blob);
+        } finally {
+            pendingThumbnails.delete(messageId);
+        }
+    })();
+    
+    pendingThumbnails.set(messageId, promise);
+    return promise;
 }
 
 async function downloadMessageBytes(
@@ -1664,10 +1693,12 @@ async function downloadMessageBytes(
     message: TelegramMessage,
     options: { progressCallback?: (downloaded: unknown, total: unknown) => void; thumb?: number | string | any } = {}
 ): Promise<Uint8Array> {
-    const result = await client.downloadMedia(message, options);
-    if (!result || typeof result === 'string') throw new Error('Download failed');
-    if (result instanceof Uint8Array) return result;
-    return new Uint8Array(result);
+    return runWithGlobalNetworkMutex(async () => {
+        const result = await client.downloadMedia(message, options);
+        if (!result || typeof result === 'string') throw new Error('Download failed');
+        if (result instanceof Uint8Array) return result;
+        return new Uint8Array(result);
+    });
 }
 
 export async function getTelegramMessage(messageId: number): Promise<TelegramMessage> {

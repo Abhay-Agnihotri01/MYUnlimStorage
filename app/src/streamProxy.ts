@@ -1,4 +1,4 @@
-import { getAuthorizedClient, getTelegramMessage, getDriveManifest } from './telegramBrowser';
+import { getAuthorizedClient, getTelegramMessage, getDriveManifest, runWithGlobalNetworkMutex } from './telegramBrowser';
 
 const CHUNK_SIZE = 1024 * 512; // 512 KB alignment
 const MAX_CACHE_SIZE = 50; // Max 25MB memory buffer
@@ -10,7 +10,6 @@ interface CachedChunk {
 const chunkCache = new Map<string, CachedChunk>();
 const fetchPromises = new Map<string, Promise<Uint8Array>>();
 const abortControllers = new Map<number, AbortController>();
-let downloadMutex = Promise.resolve();
 
 async function getOrFetchChunk(messageId: number, alignedOffset: number, signal?: AbortSignal): Promise<Uint8Array> {
     const key = `${messageId}_${alignedOffset}`;
@@ -26,7 +25,7 @@ async function getOrFetchChunk(messageId: number, alignedOffset: number, signal?
     }
 
     const promise = new Promise<Uint8Array>((resolve, reject) => {
-        downloadMutex = downloadMutex.then(async () => {
+        runWithGlobalNetworkMutex(async () => {
             if (signal?.aborted) {
                 reject(new Error('Aborted'));
                 return;
@@ -93,7 +92,7 @@ async function getOrFetchChunk(messageId: number, alignedOffset: number, signal?
                 fetchPromises.delete(key);
                 reject(e);
             }
-        }).catch(() => {});
+        });
     });
 
     fetchPromises.set(key, promise);
