@@ -102,21 +102,47 @@ export function useFileOperations(
                 : null;
             if (useDesktopFileDialog && !dirPath) return;
             let successCount = 0;
-            const targetFiles = displayedFiles.filter((f) => selectedIds.includes(f.id));
+            const targetFiles = displayedFiles.filter((f) => selectedIds.includes(f.id) && f.type !== 'folder');
             toast.info(`Starting batch download of ${targetFiles.length} files...`);
 
-            for (const file of targetFiles) {
-                try {
-                    if (useDesktopFileDialog) {
+            if (useDesktopFileDialog) {
+                for (const file of targetFiles) {
+                    try {
                         const filePath = `${dirPath}/${file.name}`;
                         await invokeCommand('cmd_download_file', { messageId: file.id, savePath: filePath, folderId: activeFolderId });
-                    } else {
-                        await downloadBrowserFile(file.id, file.name);
-                    }
-                    successCount++;
-                } catch { }
+                        successCount++;
+                    } catch { }
+                }
+                toast.success(`Downloaded ${successCount} files.`);
+            } else {
+                const JSZip = (await import('jszip')).default;
+                const zip = new JSZip();
+                const { getBrowserBlob } = await import('../platform');
+                
+                for (const file of targetFiles) {
+                    try {
+                        const { blob, name } = await getBrowserBlob(file.id);
+                        zip.file(name || file.name, blob);
+                        successCount++;
+                    } catch { }
+                }
+                
+                if (successCount > 0) {
+                    toast.info(`Generating zip file...`);
+                    const zipBlob = await zip.generateAsync({ type: 'blob' });
+                    const url = URL.createObjectURL(zipBlob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `TelegramDrive_Download_${Date.now()}.zip`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    toast.success(`Downloaded ${successCount} files as a zip.`);
+                } else {
+                    toast.error(`Failed to download files.`);
+                }
             }
-            toast.success(`Downloaded ${successCount} files.`);
             setSelectedIds([]);
         } catch (e) {
             toast.error(`Bulk download failed: ${friendlyDriveError(e)}`);
@@ -141,7 +167,8 @@ export function useFileOperations(
     };
 
     const handleDownloadFolder = async () => {
-        if (displayedFiles.length === 0) {
+        const targetFiles = displayedFiles.filter((f) => f.type !== 'folder');
+        if (targetFiles.length === 0) {
             toast.info("Folder is empty.");
             return;
         }
@@ -151,19 +178,46 @@ export function useFileOperations(
                 : null;
             if (useDesktopFileDialog && !dirPath) return;
             let successCount = 0;
-            toast.info(`Downloading folder contents (${displayedFiles.length} files)...`);
-            for (const file of displayedFiles) {
-                try {
-                    if (useDesktopFileDialog) {
+            toast.info(`Downloading folder contents (${targetFiles.length} files)...`);
+            
+            if (useDesktopFileDialog) {
+                for (const file of targetFiles) {
+                    try {
                         const filePath = `${dirPath}/${file.name}`;
                         await invokeCommand('cmd_download_file', { messageId: file.id, savePath: filePath, folderId: activeFolderId });
-                    } else {
-                        await downloadBrowserFile(file.id, file.name);
-                    }
-                    successCount++;
-                } catch { }
+                        successCount++;
+                    } catch { }
+                }
+                toast.success(`Folder Download Complete: ${successCount} files.`);
+            } else {
+                const JSZip = (await import('jszip')).default;
+                const zip = new JSZip();
+                const { getBrowserBlob } = await import('../platform');
+                
+                for (const file of targetFiles) {
+                    try {
+                        const { blob, name } = await getBrowserBlob(file.id);
+                        zip.file(name || file.name, blob);
+                        successCount++;
+                    } catch { }
+                }
+                
+                if (successCount > 0) {
+                    toast.info(`Generating zip file...`);
+                    const zipBlob = await zip.generateAsync({ type: 'blob' });
+                    const url = URL.createObjectURL(zipBlob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `TelegramDrive_Folder_${Date.now()}.zip`;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    toast.success(`Folder Download Complete: ${successCount} files as a zip.`);
+                } else {
+                    toast.error(`Failed to download folder files.`);
+                }
             }
-            toast.success(`Folder Download Complete: ${successCount} files.`);
         } catch (e) {
             toast.error(`Download folder failed: ${friendlyDriveError(e)}`);
         }
